@@ -7,6 +7,9 @@ from sqlDatabase import *
 
 SQLDATABASE = 'TA2SQLConnection.txt'
 
+# IMPORT DIAGNOSTIC CODES
+import SPIDERAnalysis
+
 
 class dataRun:
 
@@ -25,11 +28,14 @@ class dataRun:
 	#
 	# Diagnostic Function Calls
 	# 	Espec
-	#		initESpecAnalysis
+	#		performESpecAnalysis
 	#		getESpecCharge
-	#	HASO
+	#	SPIDER
+	#		performSPIDERAnalysis
 	#	
 	# A Selection of Generic Functions
+	#	getDiagDataPath	
+	#	getDiagAnalysisPath
 	#	getImage
 	#	averageImagesInFolder
 	#	averageReferenceImages
@@ -166,18 +172,20 @@ class dataRun:
 
 	def createAnalysisFolder(self):
 		# Checks if an analysisFolder already exists.
+		# This folder is a general non diagnostic specific folder
 		# If not, one will be created
 		baseAnalysisFolder 	= self.baseAnalysisFolder
+		diagName 			= 'General'
 		runDate 		   	= self.runDate
 		runName				= self.runName
-		analysisPath = os.path.join(baseAnalysisFolder, runDate, runName)
+		analysisPath = os.path.join(baseAnalysisFolder, diagName , runDate, runName)
 		if os.path.exists(analysisPath) is not True:
 			os.makedirs(analysisPath)
 			if self.verbose:
-				print('\n\nAnalysis folder has been created\n')
+				print('\n\nGeneral Analysis folder has been created\n')
 		else:
 			if self.verbose:
-				print('\n\nAnalysis folder already exists\n')
+				print('\n\nGeneral Analysis folder already exists\n')
 		return(analysisPath)
 
 
@@ -216,7 +224,7 @@ class dataRun:
 
 
 	# ELECTRON SPECTRUM ANALYSIS CALLS -- THIS IS CURRENTLY JUST AN EXAMPLE
-	def initESpecAnalysis(self,overwriteData=False):
+	def performESpecAnalysis(self,overwriteData=False):
 		# Check if analysed data already exists
 		# if it does and overWriteData == False, then exit function
 		# otherwise, perform analysis
@@ -233,7 +241,30 @@ class dataRun:
 
 
 
-	# HASO DIAGOSTIC
+	# SPIDER ANALYSIS CALLS -- THIS IS CURRENTLY JUST AN EXAMPLE
+	def performSPIDERAnalysis(self):
+		# Get RelevantPaths
+		analysisPath, analysisPathExists = self.getDiagAnalysisPath(diag)
+		dataPath = self.getDiagDataPath(diag)
+
+		# find list of bursts for which spider data was taken
+		burstList = os.listdir(dataPath)
+		for burst in burstList:
+			shotList = os.listdir(os.path.join(dataPath,burst))
+			shotListPaths = []
+			for shot in shotList:
+				shotListPaths.append(os.path.join(dataPath,burst,shot))
+
+			# NOW CALL THE FUNCTION TO ANALYSE ALL OF THE DATA IN THE BURST GIVEN A LIST OF SHOT PATHS
+			analysedData = SPIDERAnalysis.analyseBurst(shotListPaths)
+
+			# Save the data
+			analysisSavePath = os.path.join(analysisPath,burst,'analysis')
+			self.saveData(analysisSavePath,analysedData)
+
+		# Print some shit to the log here. Someone to write function.
+
+		return 0
 
 	
 	# -------------------------------------------------------------------------------------------------------------------
@@ -242,6 +273,31 @@ class dataRun:
 
 
 	# SUBROUTINES
+
+	def getDiagDataPath(self,diag):
+		# Gives you back the relative paths to retrieve data from
+		# DOESN'T WORK FOR ANALYSIS OF DARKFIELDS OR REFERNECES
+		baseDataFolder 	= self.baseDataFolder
+		runDate 		   	= self.runDate
+		runName				= self.runName
+		dataPath = os.path.join(baseDataFolder, diag, runDate, runName)
+
+		return dataPath
+
+
+	def getDiagAnalysisPath(self,diag):
+		# Gives you back the relative analysis path to save analysis data or retrieve analysis data from
+		# DOESN'T WORK FOR ANALYSIS OF DARKFIELDS OR REFERNECES
+		baseAnalysisFolder 	= self.baseAnalysisFolder
+		runDate 		   	= self.runDate
+		runName				= self.runName
+		analysisPath = os.path.join(baseAnalysisFolder, diag, runDate, runName)
+
+		# check if it exists
+		isItReal = os.path.exists(analysisPath)
+
+		return analysisPath, isItReal
+
 	def getImage(self,filePath):
 		# We pass the full file path to here
 		img = plt.imread(filePath).astype(float)
