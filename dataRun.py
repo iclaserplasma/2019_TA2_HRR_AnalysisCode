@@ -10,7 +10,45 @@ SQLDATABASE = 'TA2SQLConnection.txt'
 
 class dataRun:
 
-	# HOUSEKEEPING AND ADMIN
+
+
+	# -------------------------------------------------------------------------------------------------------------------
+	# -----										WHATS IN HERE????		 											-----
+	# -------------------------------------------------------------------------------------------------------------------
+
+	# Housekeeping and admin
+	#	__init__
+	#	findAvailableDiagnostics
+	#	runsOrBursts
+	#	createAnalysisFolder
+	#	collectSQLData
+	#
+	# Diagnostic Function Calls
+	# 	Espec
+	#		initESpecAnalysis
+	#		getESpecCharge
+	#	HASO
+	#	
+	# A Selection of Generic Functions
+	#	getImage
+	#	averageImagesInFolder
+	#	averageReferenceImages
+	#	getCounts
+	#	subtractRemainingBg
+	#	createDataBuckets
+	#
+	# Saving and Loading Analysed Data
+	#	saveData
+	#	saveRunObject
+
+
+
+
+
+	# -------------------------------------------------------------------------------------------------------------------
+	# -----										HOUSEKEEPING AND ADMIN	 											-----
+	# -------------------------------------------------------------------------------------------------------------------
+
 
 	def __init__(self, baseDataFolder, baseAnalysisFolder, runDate, runName,refRunDate,refRunName,verbose=0):
 		# baseDataFolder is the location of the Mirage Data folder
