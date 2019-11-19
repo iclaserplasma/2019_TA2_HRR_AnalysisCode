@@ -10,7 +10,7 @@ SQLDATABASE = 'TA2SQLConnection.txt'
 
 class dataRun:
 
-	# ADMIN
+	# HOUSEKEEPING AND ADMIN
 
 	def __init__(self, baseDataFolder, baseAnalysisFolder, runDate, runName,refRunDate,refRunName,verbose=0):
 		# baseDataFolder is the location of the Mirage Data folder
@@ -47,18 +47,6 @@ class dataRun:
 		# Collect SQL Data
 		self.collectSQLData()
 
-	# ELECTRON SPECTRUM ANALYSIS CALLS
-	def initESpecAnalysis(self,overwriteData):
-		# Load in reference
-		# Analyse each shot in run and save key parameters
-		# update log
-
-	def getESpecCharge(self,overwriteData):
-		# Load the espec charge for the run
-		# if it exists get it, if not, run initESpecAnalysis and update log
-		return sho, charge
-
-	# HASO DIAGOSTIC
 
 	def findAvailableDiagnostics(self,runDate,runName):
 		# By following through the folder system, this will tell us what the diagnostics were for the run
@@ -180,125 +168,39 @@ class dataRun:
 		self.saveData('gasCellLength',gasCellLength)
 
 
-	# MAIN ANALYSIS ROUTINES
-
-
-	def analyseCounts(self,diag):
-		# get the averaged XRay counts
-		bgImg = self.averageReferenceImages(diag)
-		#apply a median filter to prevent hot pixels fucking with stuff
-		bgImg = medfilt(bgImg,5)
-
-		# Now run through each data image, subtract the 
-		baseDataFolder = self.baseDataFolder
-		runName = self.runName
-		runDate = self.runDate
-		diagShotDict = self.diagShotDict
-		datShots = diagShotDict[diag] 
-
-		datPath = os.path.join(baseDataFolder,diag,runDate,runName)
-		counts = np.zeros(datShots)
-
-		if type(datShots) is tuple:
-			
-			# For each burst, go through, pull each shot and subtract the bg
-			# calculate the counts and store in a big array
-			bursts = os.listdir(datPath)
-			bCntr = 0
-			burstNums =[]
-			for burst in bursts:
-				shots = os.listdir(os.path.join(datPath,burst))
-				sCntr = 0
-				for shot in shots:
-					try:
-						img = self.getImage(os.path.join(datPath,burst,shot))
-						counts[bCntr,sCntr] = self.getCounts(img-bgImg)
-					except:
-						print('Index Out of Bounds: (%i,%i)' %(bCntr,sCntr))
-					sCntr = sCntr + 1
-				bCntr = bCntr + 1
-				if self.verbose:
-					print('Analysed: ' + os.path.join(datPath,burst))
-				burstNums.append( int(burst[5:]))
-		# Save data to be analysed later on
-		diagCountsName = diag + 'Counts'
-		diagBNumName = diag + 'Counts' + 'BNums'
-		self.saveData(diagCountsName,counts)
-		self.saveData(diagBNumName,burstNums)
-
-		return(counts)	
 
 
 
-	def saveAveragedImgsFromBurst(self,diag,meanImgCountThreshold,bgRegion=None):
-		# get the averaged images for each burst in a run
-		# provided the image counts are above meanImgCountThreshold
+	# -------------------------------------------------------------------------------------------------------------------
+	# -----										DIAGNOSTIC FUNCTION CALLS 											-----
+	# -------------------------------------------------------------------------------------------------------------------
 
-		baseDataFolder = self.baseDataFolder
-		runName = self.runName
-		runDate = self.runDate
-		diagShotDict = self.diagShotDict
-		datShots = diagShotDict[diag] 
 
-		datPath = os.path.join(baseDataFolder,diag,runDate,runName)
-		bursts = os.listdir(datPath)
-		bCntr = 0
 
-		# Set up background stuff
-		if bgRegion == None: 
-			bgImg = self.averageReferenceImages(diag)
+	# ELECTRON SPECTRUM ANALYSIS CALLS -- THIS IS CURRENTLY JUST AN EXAMPLE
+	def initESpecAnalysis(self,overwriteData=False):
+		# Check if analysed data already exists
+		# if it does and overWriteData == False, then exit function
+		# otherwise, perform analysis
+		# 	Load in reference eSpec Data
+		# 	Analyse each shot in run and save key parameters to file using the standard save funcitons below
+		# 	update log
 
-			#apply a median filter to prevent hot pixels fucking with stuff
-			bgImg = medfilt(bgImg,5)
-			(m,n) = bgImg.shape
+		return 0
 
-		else:
-			# If no bg image is to be used, we nee to find the size of an image
-			shots = os.listdir(os.path.join(datPath,bursts[0]))
-			img = self.getImage(os.path.join(datPath,bursts[0],shots[0]))
-			(m,n) = img.shape
+	def getESpecCharge(self,overwriteData):
+		# Load the espec charge for the run from the analysed data
+		# if it exists get it, if not, run initESpecAnalysis and update log
+		return 0
 
-		# For each burst, go through, pull each shot and subtract the bg
-		# calculate the counts and store in a big array
 
-		for burst in bursts:
-			burstImg = np.zeros((m,n))
-			shots = os.listdir(os.path.join(datPath,burst))
-			sCntr = 0
-			for shot in shots:
-				try:
-					img = self.getImage(os.path.join(datPath,burst,shot))
-					if bgRegion is not None:
-						img = self.subtractRemainingBg(img,bgRegion)
-						img[np.where(img < 0)] = 0
 
-					else:
-						img = img - bgImg
-						img[np.where(img < 0)] = 0
-
-					counts = self.getCounts(img)
-					meanCounts = float(counts)/float((m*n))
-
-					if meanCounts > meanImgCountThreshold:
-						burstImg = burstImg + img
-						sCntr = sCntr + 1
-
-				except:
-					print('Index Out of Bounds: (%i,%i)' %(bCntr,sCntr))
-						
-			bCntr = bCntr + 1
-			if sCntr > 0:
-				# Average the images
-				burstImg = burstImg/float(sCntr)
-				# Now save the data
-				filename = 'burst' + str(bCntr) + 'averagedImg'
-				dataName = os.path.join(diag,filename)
-				self.saveData(dataName,burstImg)
-
-			if self.verbose:
-				print('Image Saved for : ' + os.path.join(datPath,burst))
+	# HASO DIAGOSTIC
 
 	
+	# -------------------------------------------------------------------------------------------------------------------
+	# -----								A SELECTION OF GENERIC FUNCTIONS											-----
+	# -------------------------------------------------------------------------------------------------------------------
 
 
 	# SUBROUTINES
@@ -372,28 +274,6 @@ class dataRun:
 		return (img - bgLevel)
 
 
-	def saveData(self,dataName,data):
-		# Saves analysed Data 
-		baseAnalysisFolder = self.baseAnalysisFolder
-		runDate = self.runDate
-		runName = self.runName
-
-		# Check if the folder exists, bearing in mind that we might have an extra
-		# path in the dataName
-		fullFilePath = os.path.join(baseAnalysisFolder,runDate,runName,dataName)
-		# check if it exists
-		if os.path.exists(os.path.dirname(fullFilePath)) is not True:
-			os.mkdir(os.path.dirname(fullFilePath))
-
-		np.save(fullFilePath, data)
-
-
-	def saveRunObject(self):
-		baseAnalysisFolder = self.baseAnalysisFolder
-		runDate = self.runDate
-		runName = self.runName
-		np.save(os.path.join(baseAnalysisFolder,runDate,runName,'runObject'), self)
-
 	def createDataBuckets(arr):
 	    # Bin the data using too many (although still a reasonable amount of) bins.
 	    numElements = round(len(arr)/2)
@@ -429,6 +309,36 @@ class dataRun:
 	    
 	    return binCenters,binWidth
 
+
+
+
+	# -------------------------------------------------------------------------------------------------------------------
+	# -----								SAVING AND LOADING ANALYSED DATA 											-----
+	# -------------------------------------------------------------------------------------------------------------------
+
+	def saveData(self,dataName,data):
+		# Saves analysed Data 
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+
+		# Check if the folder exists, bearing in mind that we might have an extra
+		# path in the dataName
+		fullFilePath = os.path.join(baseAnalysisFolder,runDate,runName,dataName)
+		# check if it exists
+		if os.path.exists(os.path.dirname(fullFilePath)) is not True:
+			os.mkdir(os.path.dirname(fullFilePath))
+
+		np.save(fullFilePath, data)
+
+
+	def saveRunObject(self):
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+		np.save(os.path.join(baseAnalysisFolder,runDate,runName,'runObject'), self)
+
+	
 	
 
 
