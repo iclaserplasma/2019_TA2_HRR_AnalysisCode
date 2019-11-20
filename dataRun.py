@@ -10,6 +10,26 @@ SQLDATABASE = 'TA2SQLConnection.txt'
 # IMPORT DIAGNOSTIC CODES
 import SPIDERAnalysis
 
+# HELPER FUNCTIONS - COULD BE PLACED ELSEWHERE?
+def getSortedFolderItems(itemPath,key):
+	itemList = os.listdir(itemPath)
+	iList = []
+	iNum = []
+	for s in itemList:
+		if key in s:
+			iList.append(s)
+			iNum.append(int(''.join(filter(str.isdigit, s))))
+	return [x for _,x in sorted(zip(iNum,iList))]
+
+def getShotFilePathDict(runPath):
+	burstList = getSortedFolderItems(runPath,'Burst')
+	filePathDict = {}
+	for b in burstList:
+		bPath = os.path.join(runPath,b)
+		fileList = getSortedFolderItems(bPath,'Shot')
+		filePathDict[b] = [os.path.join(bPath, f) for f in fileList]
+	return filePathDict
+
 
 class dataRun:
 
@@ -31,7 +51,8 @@ class dataRun:
 	#		performESpecAnalysis
 	#		getESpecCharge
 	#	SPIDER
-	#		performSPIDERAnalysis
+	#		getSpectralPhaseOrders
+	#		getTemporalProfile
 	#	
 	# A Selection of Generic Functions
 	#	getDiagDataPath	
@@ -240,33 +261,25 @@ class dataRun:
 		return 0
 
 
+	#		getTemporalProfile
 
 	# SPIDER ANALYSIS CALLS -- THIS IS CURRENTLY JUST AN EXAMPLE
-	def performSPIDERAnalysis(self):
-		# Get RelevantPaths
-		analysisPath, analysisPathExists = self.getDiagAnalysisPath(diag)
-		dataPath = self.getDiagDataPath(diag)
-
-		# find list of bursts for which spider data was taken
-		burstList = os.listdir(dataPath)
-		for burst in burstList:
-			shotList = os.listdir(os.path.join(dataPath,burst))
-			shotListPaths = []
-			for shot in shotList:
-				shotListPaths.append(os.path.join(dataPath,burst,shot))
-
-			# NOW CALL THE FUNCTION TO ANALYSE ALL OF THE DATA IN THE BURST GIVEN A LIST OF SHOT PATHS
-			analysedData = SPIDERAnalysis.analyseBurst(shotListPaths)
-
+	def getSpectralPhaseOrders(self):
+		diag = 'SPIDER'
+		filePathDict = createRunPathLists(diag)
+		for burstStr in filePathDict.keys():		
+			analysedData = SPIDERAnalysis.polyOrders(filePathDict[burstStr])
 			# Save the data
-			analysisSavePath = os.path.join(analysisPath,burst,'analysis')
+			analysisSavePath = os.path.join(analysisPath,burstStr,'analysis')
 			self.saveData(analysisSavePath,analysedData)
 
 		# Print some shit to the log here. Someone to write function.
 
 		return 0
 
-	
+
+		
+
 	# -------------------------------------------------------------------------------------------------------------------
 	# -----								A SELECTION OF GENERIC FUNCTIONS											-----
 	# -------------------------------------------------------------------------------------------------------------------
@@ -297,6 +310,13 @@ class dataRun:
 		isItReal = os.path.exists(analysisPath)
 
 		return analysisPath, isItReal
+
+	def createRunPathLists(self,diag):
+		# Get RelevantPaths
+		analysisPath, analysisPathExists = self.getDiagAnalysisPath(diag)
+		dataPath = self.getDiagDataPath(diag)
+		filePathDict = getShotFilePathDict(dataPath)
+		return filePathDict
 
 	def getImage(self,filePath):
 		# We pass the full file path to here
