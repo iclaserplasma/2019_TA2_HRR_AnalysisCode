@@ -1,14 +1,11 @@
-import os
+﻿import os
 import matplotlib.pyplot as plt
 import numpy as np 
 from scipy.signal import medfilt
-from sqlDatabase import *
-
-
-SQLDATABASE = 'TA2SQLConnection.txt'
+from ta2_hrr_analysisCode.sqlDatabase import connectToSQL
 
 # IMPORT DIAGNOSTIC CODES
-import SPIDERAnalysis
+from ta2_hrr_analysisCode import SPIDERAnalysis
 
 # HELPER FUNCTIONS - COULD BE PLACED ELSEWHERE?
 def getSortedFolderItems(itemPath,key):
@@ -211,7 +208,7 @@ class dataRun:
 
 
 	def collectSQLData(self):
-		db = connectToSQL(SQLDATABASE,True)
+		db = connectToSQL(True)
 		runName = self.runName
 		runDate = self.runDate
 

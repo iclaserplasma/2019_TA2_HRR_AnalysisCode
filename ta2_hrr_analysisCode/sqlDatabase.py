@@ -1,17 +1,14 @@
 from mysql.connector import (connection)
 #import mysql.connector
 
-
-def connectToSQL(connectionDetails,debug):
+def connectToSQL(debug):
 	''' Create a connection object for the SQL database
-	the connection details are stored in a file called connectionDetails
 	'''
-	f = open(connectionDetails, "r")
 
-	user = f.readline()[0:-1]
-	password = f.readline()[0:-1]
-	host = f.readline()[0:-1]
-	database = f.readline()
+	user = 'iclaserp_ta2user'
+	password = r'[GV]user~000'
+	host = 'iclaserplasmadbs.com'
+	database = 'iclaserp_Streeter2019'
 
 	if debug:
 		print('User: ' + user  + '\nPassword: ' + password + '\nhost: ' + host + '\ndatabase: ' + database)
