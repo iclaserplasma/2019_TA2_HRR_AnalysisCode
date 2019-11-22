@@ -1,1 +1,1 @@
-__all__ = ['dataRun','HASOAnalysis','SPIDERAnalysis','sqlDatabase','copy_mirage']
+__all__ = ['dataRun','HASOAnalysis','SPIDERAnalysis','sqlDatabase','copy_mirage','gp_opt']
