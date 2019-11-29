@@ -6,8 +6,10 @@ import xml.etree.ElementTree as ET
 import re
 import os
 from scipy.integrate import trapz
-
-
+from scipy.sparse import csr_matrix,coo_matrix
+from scipy.sparse.linalg import lsqr,lsmr
+from numpy import matlib as mb
+from scipy.interpolate import RegularGridInterpolator,griddata
 
 def splitHASOFile(filename):
     # Open file to read
@@ -30,44 +32,74 @@ def extractWavefrontInfo(dataFile):
 	
 	# First split the HASO file into a wavefront
 	# and a pupil info file
-	splitHASOFile(dataFile)
+	if len(dataFile[0]) > 1:
+		# This means we have an array of filenames
+		# in this case pull in each file and average it
+		numFiles = len(dataFile)
+		nextFile = dataFile[0]
+	else:
+		numFiles = 1
+		nextFile = dataFile
+	
+	for i in range(numFiles):
+		if i > 0:
+			nextFile = dataFile[i]
+		
+		splitHASOFile(nextFile)
+		print('Reading In File' + nextFile)
+		# Read in the XML file
+		tree = ET.parse('Wavefront.xml')
+		root = tree.getroot()
 
-	# Read in the XML file
-	tree = ET.parse('Wavefront.xml')
-	root = tree.getroot()
+		# pull out the individual elements
+		n = int(root[0][1][0][0].text)
+		m = int(root[0][1][0][1].text)
+		step = float(root[0][1][1][0].text)
+		xSlopesAsText = root[0][1][2][0].text
+		ySlopesAsText = root[0][1][3][0].text
+		intensityAsText = root[0][1][4][0].text
+		pupilAsText = root[0][1][5][0].text
 
-	# pull out the individual elements
-	n = int(root[0][1][0][0].text)
-	m = int(root[0][1][0][1].text)
-	step = float(root[0][1][1][0].text)
-	xSlopesAsText = root[0][1][2][0].text
-	ySlopesAsText = root[0][1][3][0].text
-	intensityAsText = root[0][1][4][0].text
-	pupilAsText = root[0][1][5][0].text
+		X = np.linspace(-n*step/2,n*step/2-1,n)
+		Y = np.linspace(-m*step/2,m*step/2-1,m)
 
-	X = np.linspace(-n*step/2,n*step/2-1,n)
-	Y = np.linspace(-m*step/2,m*step/2-1,m)
+		if i == 0:
+			# Convert the text arrays to numpy arrays of floats
+			xSlopes = convertAsTextToArray(xSlopesAsText)
+			ySlopes = convertAsTextToArray(ySlopesAsText)
+			intensity = convertAsTextToArray(intensityAsText)
+			pupil = convertAsTextToArray(pupilAsText)
+		else:
+			xSlopes = xSlopes + convertAsTextToArray(xSlopesAsText)
+			ySlopes = ySlopes + convertAsTextToArray(ySlopesAsText)
+			intensity = intensity + convertAsTextToArray(intensityAsText)
+			pupil = pupil + convertAsTextToArray(pupilAsText)
+		
+		
+		# And finally finally finally, we must delete the temporary files
+		# that were created by splitHASOFiles
+		os.remove('Wavefront.xml')
+		os.remove('Pupil.xml')
 
-	# Convert the text arrays to numpy arrays of floats
-	xSlopes = convertAsTextToArray(xSlopesAsText)
-	ySlopes = convertAsTextToArray(ySlopesAsText)
-	intensity = convertAsTextToArray(intensityAsText)
-	pupil = convertAsTextToArray(pupilAsText)
-
+	xSlopes = xSlopes/numFiles
+	ySlopes = ySlopes/numFiles
+	intensity = intensity/numFiles
+	pupil = pupil/numFiles
+	pupil[np.where(pupil > 1/(numFiles+1))] = 1
 
 
 	# Fially, convert xSlopes and ySlopes to phase information
-	phase = convertSlopesToPhase(xSlopes,ySlopes)
+	(X,Y,phase,intensity,pupil) = convertSlopesToPhase(X,Y,xSlopes,ySlopes,intensity,pupil)
 
 	# And finally, finally, get Zernike Coefficients
-	zernikeCoeffs = getZernikeCoefficients(X,Y,pupil,phase)
+	zernikeCoeffs,pupilCoords = getZernikeCoefficients(X,Y,pupil,phase)
 
-	# And finally finally finally, we must delete the temporary files
-	# that were created by splitHASOFiles
-	os.remove('Wavefront.xml')
-	os.remove('Pupil.xml')
+	# Sub finally, lets remove the piston term just because, it does nothing really.
+	phase = phase - zernikeCoeffs[0]*zernike(X,Y,pupilCoords,0)
+	zernikeCoeffs[0] = 0
 
-	return (X,Y,phase,intensity,pupil,xSlopes,ySlopes,zernikeCoeffs)
+	
+	return (X,Y,phase,intensity,pupil,pupilCoords,zernikeCoeffs)
 
 def convertAsTextToArray(asTextArr):
     # Takes the raw input from the haso file
@@ -89,8 +121,6 @@ def convertAsTextToArray(asTextArr):
         i = i+1
     return returnArr
 
-def convertSlopesToPhase(xSlopes,ySlopes):
-	return 0
 
 
 def getPupilCoords(X,Y,pupil):
@@ -102,6 +132,256 @@ def getPupilCoords(X,Y,pupil):
     cgy = np.sum(y*pupil)/np.sum(pupil)
     r = np.sqrt(np.sum(pupil)*dx*dy/np.pi)
     return (cgx,cgy,r)
+
+
+
+def intgrad2(fx,fy,X,Y,f00):
+	''' Converted to python from Matlab code by John D'Errico
+	 intgrad2: generates a 2-d surface, integrating gradient information.
+	 arguments: (input)
+	  fx,fy - (ny by nx) arrays, as gradient would have produced. fx and
+	          fy must both be the same size. Note that x is assumed to
+	          be the column dimension of f, in the meshgrid convention.
+	          nx and ny must both be at least 2.
+	          fx and fy will be assumed to contain consistent gradient
+	          information. If they are inconsistent, then the generated
+	          gradient will be solved for in a least squares sense.
+	          Central differences will be used where possible.
+	     X - x array of image
+	     Y - y array of image
+	 arguments: (output)
+	   fhat - (nx by ny) array containing the integrated gradient
+	'''
+
+	(ny,nx) = fx.shape
+
+	# Convert X and Y arrays to difference arrays
+	dx = np.diff(X)
+	dy = np.diff(Y)
+
+	
+	# build gradient design matrix, sparsely. Use a central difference
+	# in the body of the array, and forward/backward differences along
+	# the edges.
+
+	# A will be the final design matrix. it will be sparse.
+	# The unrolling of F will be with row index running most rapidly.
+	rhs = np.zeros((2*nx*ny,))
+	Af = np.zeros((2*nx*ny,6))
+	L = 0
+
+	indx = 0
+	indy = np.linspace(0,ny-1,ny).astype(int)
+	ind = indy + (indx)*ny
+	rind = np.transpose(mb.repmat(np.linspace(L,L+ny-1,ny).astype(int),2,1))
+	cind = np.transpose(np.asarray([ind,ind+ny]))
+	dfdx = mb.repmat(np.linspace(-1,1,2)/dx[0],ny,1)
+	Af[np.linspace(L,L+ny-1,ny).astype(int),:] = np.concatenate((rind,cind,dfdx),axis=1)
+	rhs[np.linspace(L,L+ny-1,ny).astype(int)] = fx[:,1]
+	L = L + ny
+
+	# interior partials in x, central difference
+	indx,indy = np.meshgrid(np.linspace(1,nx-2,nx-2).astype(int),np.linspace(0,ny-1,ny).astype(int))
+	indx = np.reshape(np.transpose(indx),((nx-2)*ny,))
+	indy = np.reshape(np.transpose(indy),((nx-2)*ny,))
+	ind = indy + (indx)*ny
+	m = ny*(nx-2)
+	rind = np.transpose(mb.repmat(np.linspace(L,L+m-1,m).astype(int),2,1))
+	cind = np.transpose(np.asarray([ind-ny,ind+ny]))
+	dfdx = np.transpose(np.asarray([- 1/(dx[indx-1] + dx[indx]), 1/(dx[indx-1] + dx[indx])]))
+	Af[np.linspace(L,L+m-1,m).astype(int),:] = np.concatenate((rind,cind,dfdx),axis=1)
+	fxtmp = np.reshape(np.transpose(fx),nx*ny,)
+	rhs[np.linspace(L,L+m-1,m).astype(int)] = fxtmp[ind]
+	L = L+m
+
+	# do the trailing edge in x, backward difference
+	indx = nx-1
+	indy = np.linspace(0,ny-1,ny).astype(int)
+	ind = indy + (indx)*ny
+	rind = np.transpose(mb.repmat(np.linspace(L,L+ny-1,ny).astype(int),2,1))
+	cind = np.transpose(np.asarray([ind-ny,ind]))
+	dfdx = mb.repmat(np.linspace(-1,1,2)/dx[-1],ny,1)
+	Af[np.linspace(L,L+ny-1,ny).astype(int),:] = np.concatenate((rind,cind,dfdx),axis=1)
+	rhs[np.linspace(L,L+ny-1,ny).astype(int)] = fx[:,-1]
+	L = L+ny
+
+
+	# do the leading edge in y, forward difference
+	indx = np.linspace(0,nx-1,nx).astype(int)
+	indy = 0
+	ind = indy + (indx)*ny
+	rind = np.transpose(mb.repmat(np.linspace(L,L+nx-1,nx).astype(int),2,1))
+	rind.shape
+	cind = np.transpose(np.asarray([ind,ind+1]))
+	cind.shape
+	dfdx = mb.repmat(np.linspace(-1,1,2)/dy[0],nx,1)
+	Af[np.linspace(L,L+nx-1,nx).astype(int),:] = np.concatenate((rind,cind,dfdx),axis=1)
+	#rhs[np.linspace(L,L+nx-1,nx).astype(int)] = np.transpose((fy[1,:],))
+	rhs[np.linspace(L,L+nx-1,nx).astype(int)] = fy[1,:]
+	L = L + nx
+
+	# interior partials in y, central difference
+	indx,indy = np.meshgrid(np.linspace(0,nx-1,nx).astype(int),np.linspace(1,ny-2,ny-2).astype(int))
+	indx = np.reshape(np.transpose(indx),((ny-2)*nx,))
+	indy = np.reshape(np.transpose(indy),((ny-2)*nx,))
+	ind = indy + (indx)*ny
+	m = nx*(ny-2)
+	rind = np.transpose(mb.repmat(np.linspace(L,L+m-1,m).astype(int),2,1))
+	cind = np.transpose(np.asarray([ind-1,ind+1]))
+	dfdx = np.transpose(np.asarray([- 1/(dy[indy-1] + dy[indy]), 1/(dy[indy-1] + dy[indy])]))
+	Af[np.linspace(L,L+m-1,m).astype(int),:] = np.concatenate((rind,cind,dfdx),axis=1)
+	fytmp = np.reshape(np.transpose(fy),nx*ny,)
+	rhs[np.linspace(L,L+m-1,m).astype(int)] = fytmp[ind]
+	L = L+m
+
+	# do the trailing edge in y, backward difference
+	indx = np.linspace(0,nx-1,nx).astype(int)
+	indy = ny-1
+	ind = indy + (indx)*ny 
+	rind = np.transpose(mb.repmat(np.linspace(L,L+nx-1,nx).astype(int),2,1))
+	rind.shape
+	cind = np.transpose(np.asarray([ind-1,ind]))
+	cind.shape
+	dfdx = mb.repmat(np.linspace(-1,1,2)/dy[-1],nx,1)
+	Af[np.linspace(L,L+nx-1,nx).astype(int),:] = np.concatenate((rind,cind,dfdx),axis=1)
+	rhs[np.linspace(L,L+nx-1,nx).astype(int)] = fy[-1,:]
+
+	A1 = csr_matrix((Af[:,4] , (Af[:,0].astype(int) ,Af[:,2].astype(int))),shape=(2*nx*ny,nx*ny))
+	A2 = csr_matrix((Af[:,5] , (Af[:,1].astype(int) ,(Af[:,3]).astype(int))),shape=(2*nx*ny,nx*ny))
+	A = A1+A2
+
+	Tmp = np.zeros(len(rhs),)
+	for i in range(len(rhs)):
+	    Tmp[i] = A[i,0]
+	    
+	rhs = rhs - Tmp*f00
+
+	X = lsqr(A, rhs)
+	X = np.transpose(np.reshape(X[0],(nx,ny)))
+
+	return(X)
+
+
+
+def convertSlopesToPhase(X,Y,xSlopes,ySlopes,intensity,pupil):
+	# Use intgrad2 method to convert from slopes to phase
+	# Prior to using this we will do the following:
+	# 	regrid the slopes data to add a larger box and to more finely sample it
+	# 	Set the perimeter of the box to the average value of the slopes
+	# 	Interpolate the slopes data out to the edge of the box to remove Nans
+	# 	Use intgrad2 to find the phase
+	# 	
+	# 	Finally we will look for how well we reconstructed the phase
+	# NOTE: THE FINAL PHASE THAT IS RETURNED HAS A SIZE DIFFERENT TO THAT OF THE OTHER
+	# # ARRAYS. THIS WILL NEED TO BE TAKEN CARE OF AFTER THE FUNCTION. 
+
+	LAMBDA = 0.8 # wavelength of light in microns
+
+	(m,n) = np.shape(xSlopes)
+	Nx  = 8*n
+	Ny = 8*m
+
+	# Save this for regridding later
+	oldXRes = (X[-1]-X[0])/n
+	oldYRes = (Y[-1]-Y[0])/m
+
+	xRes = (X[-1]-X[0])/n/4
+	yRes = (Y[-1]-Y[0])/m/4
+	Xtmp = X
+	Ytmp = Y
+	(X,Y, xSlopes) = reGridData(Xtmp,Ytmp,xSlopes,xRes,yRes,Nx,Ny,verbose=False)
+	(X,Y, ySlopes) = reGridData(Xtmp,Ytmp,ySlopes,xRes,yRes,Nx,Ny,verbose=False)
+
+	# ALSO REGRID PUPIL AND INTENSITY ONTO SAME GRID 
+	(X,Y, pupil) = reGridData(Xtmp,Ytmp,pupil,xRes,yRes,Nx,Ny,verbose=False)
+	(X,Y, intensity) = reGridData(Xtmp,Ytmp,intensity,xRes,yRes,Nx,Ny,verbose=False)
+
+	intensity[np.isnan(intensity)]=0
+	pupil[np.isnan(pupil)]=0
+	pupil[np.where(pupil >=0.1)] = 1
+	pupil[np.where(pupil <0.1)] = 0
+
+	# get the pupil coordinates for cropping the image afterwards
+	(cgx,cgy,r) = getPupilCoords(X,Y,pupil)
+	x,y = np.meshgrid(X,Y)
+	RR = np.sqrt((x-cgx)**2 +(y-cgy)**2)
+	newPupil = np.ones((len(Y),len(X)))
+	newPupil[np.where(RR > r)] = np.nan
+
+
+
+	xM = np.nanmean(xSlopes)
+	xSlopes[:,0] = xM
+	xSlopes[:,-1] = xM
+	xSlopes[0,:] = xM
+	xSlopes[-1,:] = xM
+
+	yM = np.nanmean(ySlopes)
+	ySlopes[:,0] = yM
+	ySlopes[:,-1] = yM
+	ySlopes[0,:] = yM
+	ySlopes[-1,:] = yM
+
+	xSlopes = np.ma.masked_invalid(xSlopes)
+	x1 = x[~xSlopes.mask]
+	y1 = y[~xSlopes.mask]
+	newarr = xSlopes[~xSlopes.mask]
+
+	xSlopesI = griddata((x1, y1), newarr.ravel(),
+	                          (x, y),
+	                             method='cubic')
+
+	ySlopes = np.ma.masked_invalid(ySlopes)
+	x1 = x[~ySlopes.mask]
+	y1 = y[~ySlopes.mask]
+	newarr = ySlopes[~ySlopes.mask]
+
+	ySlopesI = griddata((x1, y1), newarr.ravel(),
+	                          (x, y),
+	                             method='cubic')
+
+
+	XnanVals = np.isnan(xSlopes)
+	YnanVals = np.isnan(ySlopes)
+
+
+	# WE FINISH HERE BY INTEGRATION AND SOME UNIT CONVERSIONS 
+	# First we integrate the phase slopes and then divide by 1000.
+	# THE factor of 1000 is becaue the phase slopes are in units of um/mm
+	# When we integrated we integrated using units of microns rather than mm
+	# thus the factor of 1000 converts us to um.
+	phase = intgrad2(xSlopesI,ySlopesI,X,Y,0)
+	phase = phase*newPupil/1000
+
+	# Now convert from microns to radians
+	phase = phase*2*np.pi/LAMBDA
+
+	# Remove the mean level( almost piston )
+	phase = phase - np.nanmean(phase)
+
+	return (X,Y,phase,intensity,pupil)
+
+
+def reGridData(x,y,dat,resX,resY,Nx,Ny,verbose=False):
+    ''' Re Gridding data dat from a grid defined by x and y
+    on to a new grid Nx by Ny which has grid spacing resX and resY
+    The input beam should be centered on (0,0) which should be the middle of the grid'''
+    
+    # Create the function for interpolating the data
+    interFn = RegularGridInterpolator((y,x), dat,bounds_error=False,fill_value=np.nan)
+    
+    # Target Grid
+    xNew = np.linspace(-resX*Nx/2,resX*Nx/2 - resX ,Nx)
+    yNew = np.linspace(-resY*Ny/2,resY*Ny/2 - resY ,Ny)
+    regriddedData = np.zeros((Ny,Nx),dtype=float)
+
+    for i in range(Nx):
+    	for j in range(Ny):
+    		regriddedData[j][i] = interFn([yNew[j],xNew[i]])
+
+    return (xNew,yNew, regriddedData)
+
+
 
 
 def zernike(X,Y,pupilCoords,j):
@@ -116,13 +396,14 @@ def zernike(X,Y,pupilCoords,j):
     # Pupil coords is the result of getPupilCoords
     # j is the index of the Zernike
     
+
     (cgx,cgy,r) = pupilCoords
     x,y = np.meshgrid(X,Y)
-    R = np.sqrt((x-cgx)**2 + (y-cgy)**2)
+    R = np.sqrt((x-cgx)**2 + (y-cgy)**2)/r
     theta = np.arctan2(y-cgy, x-cgx)
     
     pupil = np.ones((len(Y),len(X)))
-    pupil[np.where(R > r) ] = np.nan
+    pupil[np.where(R > 1) ] = np.nan
 
     if j == 0:
         # Piston
@@ -172,15 +453,20 @@ def zernike(X,Y,pupilCoords,j):
 def getZernikeCoefficients(X,Y,pupil,phase):
     # Find the zernike coefficients for the phase profile
     
-    pupilCoords = getPupilCoords(X,Y,pupil)
-    dx = X[1]-X[0]
-    dy = Y[1]-Y[0]
-    
-    zList = np.zeros(10,)
-    for i in range(10):
-        Zj = zernike(X,Y,pupilCoords,i)
-        Zj[np.isnan(Zj)]=0
-        phase[np.isnan(phase)]=0
-        integral = trapz(trapz(Zj*phase,dx=dx,axis=1),dx=dy,axis=0)
-        zList[i] = integral/np.pi
-    return zList
+	pupilCoords = getPupilCoords(X,Y,pupil)
+	(cgx,cgy,r) = pupilCoords
+	dx = (X[1]-X[0])/r
+	dy = (Y[1]-Y[0])/r
+
+	zList = np.zeros(10,)
+	for i in range(10):
+		Zj = zernike(X,Y,pupilCoords,i)
+		Zj[np.isnan(Zj)]=0
+		phase[np.isnan(phase)]=0
+		integral = trapz(trapz(Zj*phase,dx=dx,axis=1),dx=dy,axis=0)
+		zList[i] = integral/np.pi	
+	return zList,pupilCoords
+
+def removeTiltFocus(X,Y,phase,zList,pupilCoords):
+	phasePTFR = phase-zList[0]*zernike(X,Y,pupilCoords,0) - zList[1]*zernike(X,Y,pupilCoords,1)-zList[2]*zernike(X,Y,pupilCoords,2)-zList[4]*zernike(X,Y,pupilCoords,4)
+	return phasePTFR
