@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 from ta2_hrr_analysisCode.gp_opt import BasicOptimiser 
-from sklearn.gaussian_process.kernels import RBF
+from sklearn.gaussian_process.kernels import RBF, Matern
 
 def readLogFile(logFilePath):
     if os.path.isfile(logFilePath):
@@ -44,7 +44,7 @@ def GP_optimiser(nDims,sScale=None):
     kernel =2**2 * RBF(length_scale=length_scale,length_scale_bounds=length_scale_bounds)
     kernel.k1.constant_value_bounds = (0.001,100)
 
-    BO = BasicOptimiser(nDims, kernel=kernel, sample_scale=sScale, maximise_effort=100,fit_white_noise=True)
+    BO = BasicOptimiser(nDims, kernel=kernel, sample_scale=1,scale=sScale, maximise_effort=100,fit_white_noise=True)
     return BO
 
 
