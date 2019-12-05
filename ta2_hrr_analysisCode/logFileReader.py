@@ -69,15 +69,22 @@ def getParamLims(xList):
     return xLims
         
 
-def plotOptParams(xList,yList,xOptList):
+def plotOptParams(xList,yList,xOptList,plotDims=[16/2.54, 16/2.54/1.6/3],dpi=160):
     nRows = len(xList)
     nDims = len(xList[0].keys())
     nPlots = int(np.ceil(nDims/2))
-    f, axs = plt.subplots(nRows,nPlots,figsize=(3*8.5/2.54, 3*8.5/2.54/1.6/3*nRows), dpi=80, facecolor='w', edgecolor='k')
+    f, axs = plt.subplots(nRows,nPlots,figsize=(plotDims[0], plotDims[1]*nRows), dpi=dpi, facecolor='w', edgecolor='k')
     xLims = getParamLims(xList)
     m=0
     for x,y,xOpt in zip(xList,yList,xOptList):
         keys = list(x.keys())
+        yKey = None
+        for key in y.keys():
+            if yKey is None:
+                yKey = key
+            else:
+                print('extra y keys ignored')
+        yVals = y[yKey]
         m = m+1
         for n in range(1,nPlots+1):
             fig = plt.subplot(nRows,nPlots,n+(nPlots*(m-1)))
@@ -94,25 +101,37 @@ def plotOptParams(xList,yList,xOptList):
                 yO = xOpt[(n-1)*2+1]
             a1=x[k1]
             a2=x[k2]
-
-            iSel = np.argsort(y)
-
-            plt.scatter(a1[iSel],a2[iSel],c=y[iSel],cmap='winter',s=4)
+            a1_factor1000 = np.trunc(np.log10(np.max(np.abs(xLims[k1])))/np.log10(1e3))
+            a1_factor = 1e3**a1_factor1000
+            a2_factor1000 = np.trunc(np.log10(np.max(np.abs(xLims[k2])))/np.log10(1e3))
+            a2_factor = 1e3**a2_factor1000
+            iSel = np.argsort(yVals)
+            
+            plt.scatter(a1[iSel]/a1_factor,a2[iSel]/a2_factor,c=yVals[iSel],cmap='winter',s=4)
 
             
             if not (np.min(a1)==np.max(a1)):
-                plt.plot([a1[0]]*2,xLims[k2],'k--')
-                plt.plot([xO]*2,xLims[k2],'r--')
+                plt.plot([a1[0]]*2/a1_factor,xLims[k2]/a2_factor,'k--')
+                plt.plot([xO]*2/a1_factor,xLims[k2]/a2_factor,'r--')
             if not (np.min(a2)==np.max(a2)):
-                plt.plot(xLims[k1],[a2[0]]*2,'k--')
-                plt.plot(xLims[k1],[yO]*2,'r--')
+                plt.plot(xLims[k1]/a1_factor,[a2[0]]*2/a2_factor,'k--')
+                plt.plot(xLims[k1]/a1_factor,[yO]*2/a2_factor,'r--')
                 
-            plt.xlim(xLims[k1])
-            plt.ylim(xLims[k2])
-            plt.xlabel(k1)
-            plt.ylabel(k2)
+            plt.xlim(xLims[k1]/a1_factor)
+            plt.ylim(xLims[k2]/a2_factor)
+            if a1_factor1000==0:
+                plt.xlabel(k1)
+            else:
+                plt.xlabel(k1 + r'$ \times 10^{' + '%1u' % (a1_factor1000*3) + '}$')
+            if a2_factor1000==0:
+                plt.ylabel(k2)
+            else:
+                plt.ylabel(k1 + r'$ \times 10^{' + '%1u' % (a1_factor1000*3) + '}$')
 
-        plt.colorbar()
-        plt.tight_layout()
+
+        cbh=plt.colorbar()
+        cbh.set_label(yKey)
+    plt.tight_layout()
+    return f, axs 
 
 
