@@ -12,7 +12,8 @@ def readLogFile(logFilePath):
         df = None
         return
 
-    GP_flag = 'fitness' in df.keys()
+    fitness = None
+    fitness_err = None
     params ={}
     for key in df.keys():
         vals = df[key].values
