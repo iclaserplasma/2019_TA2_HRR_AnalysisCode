@@ -135,4 +135,21 @@ def plotOptParams(xList,yList,xOptList,plotDims=[16/2.54, 16/2.54/1.6/3],dpi=160
     plt.tight_layout()
     return f, axs 
 
+def plotGP_maximum(logFilePath,GP=None):
+    bNum, params, fitness, fitness_err, nDims = readLogFile(logFilePath)
+    
+    if GP is None:
+        nDims = len(params.keys())
+        GP = GP_optimiser(nDims)
+    GP_max = []
+    for n in range(len(bNum)):
+        x_test = []
+        for key in params.keys():
+            x_test.append(params[key][n])
+        GP.tell(x_test,fitness[n],fitness_err[n])
+        best_pos, best_val = GP.optimum()
+        GP_max.append(best_val)
+    return bNum,np.array(GP_max)
+        
+
 
