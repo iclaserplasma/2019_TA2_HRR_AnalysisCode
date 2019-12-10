@@ -385,81 +385,165 @@ def reGridData(x,y,dat,resX,resY,Nx,Ny,verbose=False):
 
 
 def zernike(X,Y,pupilCoords,j):
-    # Provides the required Zernike Polynomial
-    # Defined on the pupil.
-    # The zernike poynomial is indexed by j, with the following:
-    # j = {0:Piston, 1:YTilt, 2:XTilt, 3:ObliqueAstig, 4:Focus, 5:VerticalAstig,...
-    # 6:VerticalTrefoil, 7:VerticalComa, 8:HorizontalComa, 9:ObliqueTrefoil}
-    # Currently, we're only using the first 10
-    
-    # X and Y are 1D arrays of the x and y direction
-    # Pupil coords is the result of getPupilCoords
-    # j is the index of the Zernike
-    
+	# Provides the required Zernike Polynomial
+	# Defined on the pupil.
+	# The zernike poynomial is indexed by j, with the following:
+	# j = {0:Piston, 1:YTilt, 2:XTilt, 3:ObliqueAstig, 4:Focus, 5:VerticalAstig,...
+	# 6:VerticalTrefoil, 7:VerticalComa, 8:HorizontalComa, 9:ObliqueTrefoil}
+	# Currently, we're only using the first 10
 
-    (cgx,cgy,r) = pupilCoords
-    x,y = np.meshgrid(X,Y)
-    R = np.sqrt((x-cgx)**2 + (y-cgy)**2)/r
-    theta = np.arctan2(y-cgy, x-cgx)
-    
-    pupil = np.ones((len(Y),len(X)))
-    pupil[np.where(R > 1) ] = np.nan
+	# X and Y are 1D arrays of the x and y direction
+	# Pupil coords is the result of getPupilCoords
+	# j is the index of the Zernike
 
-    if j == 0:
-        # Piston
-        zMode = np.ones((len(Y),len(X)))
-        
-    elif j ==1:
-        # Y Tilt
-        zMode = 2*R*np.sin(theta)
-        
-    elif j ==2:
-        # X Tilt
-        zMode = 2*R*np.cos(theta)
-        
-    elif j ==3:
-        # Oblique Astigmatism
-        zMode = np.sqrt(6) * (R**2) * np.sin(2*theta)
-        
-    elif j ==4:
-        # Focus
-        zMode = np.sqrt(3) * (2*(R**2) -1)
-        
-    elif j ==5:
-        # Vertical Astigmastism
-        zMode = np.sqrt(6) * (R**2) * np.cos(2*theta)
-        
-    elif j ==6:
-        # Vertical Trefoil
-        zMode = np.sqrt(8) * (R**3) * np.sin(3*theta)
-        
-    elif j ==7:
-        # Vertical Coma
-        zMode = np.sqrt(8) * (3*(R**3) - 2*R) * np.sin(theta)
-        
-    elif j ==8:
-        # Horizontal Coma 
-        zMode = np.sqrt(8) * (3*(R**3) - 2*R) * np.cos(theta)    
-        
-    elif j ==9:
-        # Oblique Trefoil
-        zMode = np.sqrt(8) * (R**3) * np.cos(3*theta)
-    else:
-        print('j out of bounds')
-        
-        
-    return zMode*pupil
+
+	(cgx,cgy,r) = pupilCoords
+	x,y = np.meshgrid(X,Y)
+	R = np.sqrt((x-cgx)**2 + (y-cgy)**2)/r
+	theta = np.arctan2(y-cgy, x-cgx)
+
+	pupil = np.ones((len(Y),len(X)))
+	pupil[np.where(R > 1) ] = np.nan
+
+	if j == 0:
+		# Piston
+		zMode = np.ones((len(Y),len(X)))
+		
+	elif j ==1:
+		# Y Tilt
+		zMode = 2*R*np.sin(theta)
+		
+	elif j ==2:
+		# X Tilt
+		zMode = 2*R*np.cos(theta)
+		
+	elif j ==3:
+		# Oblique Astigmatism
+		zMode = np.sqrt(6) * (R**2) * np.sin(2*theta)
+		
+	elif j ==4:
+		# Focus
+		zMode = np.sqrt(3) * (2*(R**2) -1)
+		
+	elif j ==5:
+		# Vertical Astigmastism
+		zMode = np.sqrt(6) * (R**2) * np.cos(2*theta)
+		
+	elif j ==6:
+		# Vertical Trefoil
+		zMode = np.sqrt(8) * (R**3) * np.sin(3*theta)
+		
+	elif j ==7:
+		# Vertical Coma
+		zMode = np.sqrt(8) * (3*(R**3) - 2*R) * np.sin(theta)
+
+	elif j ==8:
+		# Horizontal Coma 
+		zMode = np.sqrt(8) * (3*(R**3) - 2*R) * np.cos(theta)    
+		
+	elif j ==9:
+		# Oblique Trefoil
+		zMode = np.sqrt(8) * (R**3) * np.cos(3*theta)
+
+	elif j ==10:
+		# Oblique Quadrofail
+		zMode = np.sqrt(10) * (R**4) * np.sin(4*theta)
+
+	elif j ==11:
+		# Oblique secondary astigmatism
+		zMode = np.sqrt(10) * (4*(R**4) - 3*(R**2)) * np.sin(2*theta)
+
+	elif j ==12:
+		# Oblique secondary astigmatism
+		zMode = np.sqrt(5) * (6*(R**4) - 6*(R**2) + 1) 
+
+	elif j ==13:
+		# Primary Spherical
+		zMode = np.sqrt(10) * (4*(R**4) - 3*(R**2)) * np.cos(2*theta)
+
+	elif j ==14:
+		# vertical Quadrofail
+		zMode = np.sqrt(10) * (R**4) * np.cos(4*theta)
+
+	elif j == 15:
+		zMode = np.sqrt(12) * (R**5) * np.sin(5*theta)
+	
+	elif j == 16:
+		zMode = np.sqrt(12) * (5*(R**5) - 4*(R**3)) * np.sin(3*theta)
+
+	elif j == 17:
+		zMode = np.sqrt(12) * (10*(R**5) - 12*(R**3) + 3*R) * np.sin(theta)
+
+	elif j == 18:
+		zMode = np.sqrt(12) * (10*(R**5) - 12*(R**3) + 3*R) * np.cos(theta)
+
+	elif j == 19:
+		zMode = np.sqrt(12) * (5*(R**5) - 4*(R**3)) * np.cos(3*theta)
+	
+	elif j == 20:
+		zMode = np.sqrt(12) * (R**5) * np.cos(5*theta)
+	
+	elif j == 21:
+		zMode = np.sqrt(14) * (R**6) * np.sin(6*theta)
+
+	elif j == 22:
+		zMode = np.sqrt(14) * (6*(R**6) - 5*(R**4)) * np.sin(4*theta)
+
+	elif j == 23:
+		zMode = np.sqrt(14) * (15*(R**6) - 20*(R**4) + 6*(R**2)) * np.sin(2*theta)
+
+	elif j == 24:
+		zMode = np.sqrt(7) * (20*(R**6) - 30*(R**4) + 12*(R**2) -1) 
+
+	elif j == 25:
+		zMode = np.sqrt(14) * (15*(R**6) - 20*(R**4) + 6*(R**2)) * np.cos(2*theta)
+
+	elif j == 26:
+		zMode = np.sqrt(14) * (6*(R**6) - 5*(R**4)) * np.cos(4*theta)
+
+	elif j == 27:
+		zMode = np.sqrt(14) * (R**6) * np.cos(6*theta)
+
+	elif j == 28:
+		zMode = 4 * (R**7) * np.sin(7*theta)
+
+	elif j == 29:
+		zMode = 4 * (7*(R**7) - 6*(R**5)) * np.sin(5*theta)
+
+	elif j == 30:
+		zMode = 4 * (21*(R**7) - 30*(R**5) + 10*(R**3)) * np.sin(3*theta)
+
+	elif j == 31:
+		zMode = 4 * (35*(R**7) - 60*(R**5) + 30*(R**3) - 4*R) * np.sin(theta)
+
+	elif j == 32:
+		zMode = 4 * (35*(R**7) - 60*(R**5) + 30*(R**3) - 4*R) * np.cos(theta)
+
+	elif j == 33:
+		zMode = 4 * (21*(R**7) - 30*(R**5) + 10*(R**3)) * np.cos(3*theta)
+
+	elif j == 34:
+		zMode = 4 * (7*(R**7) - 6*(R**5)) * np.cos(5*theta)
+
+	elif j == 35:
+		zMode = 4 * (R**7) * np.cos(7*theta)
+
+	else:
+		print('j out of bounds')
+		
+		
+	return zMode*pupil
 
 def getZernikeCoefficients(X,Y,pupil,phase):
-    # Find the zernike coefficients for the phase profile
+	''' Find the zernike coefficients for the phase profile'''
     
 	pupilCoords = getPupilCoords(X,Y,pupil)
 	(cgx,cgy,r) = pupilCoords
 	dx = (X[1]-X[0])/r
 	dy = (Y[1]-Y[0])/r
 
-	zList = np.zeros(10,)
-	for i in range(10):
+	zList = np.zeros(36,)
+	for i in range(36):
 		Zj = zernike(X,Y,pupilCoords,i)
 		Zj[np.isnan(Zj)]=0
 		phase[np.isnan(phase)]=0
@@ -470,3 +554,30 @@ def getZernikeCoefficients(X,Y,pupil,phase):
 def removeTiltFocus(X,Y,phase,zList,pupilCoords):
 	phasePTFR = phase-zList[0]*zernike(X,Y,pupilCoords,0) - zList[1]*zernike(X,Y,pupilCoords,1)-zList[2]*zernike(X,Y,pupilCoords,2)-zList[4]*zernike(X,Y,pupilCoords,4)
 	return phasePTFR
+
+def createWavefront(X,Y,zList,pupilCoords):
+	'''Given a set of zernike coefficents, create a wavefront'''
+
+	phase = np.zeros((len(Y),len(X)))
+	
+	for i in range(len(zList)):
+		phase = phase + zList[i]*zernike(X,Y,pupilCoords,i)
+	
+	return phase
+
+
+def createReference(inChamberHas,leakageHas):
+	''' The wavefront outside the chamber was referenced to that inside
+	the chamber by placing the haso at both positions and measuring the beam
+	in quick succession. This gives us an idea of the aberrations introduced 
+	by the leakage line with respect to the interaction point.
+	Here we combine the two wavefronts to find the reference.
+	
+	We need to be careful here, because there is no guarantee they are the same beam size
+	To make things simpler we could simply add the zernike modes...rather than regridding the
+	wavefront'''
+
+	(XIC,YIC,phaseIC,intensityIC,pupilIC,pupilCoordsIC,zernikeCoeffsIC) = extractWavefrontInfo(inChamberHas)
+	(XLK,YLK,phaseLK,intensityLK,pupilLK,pupilCoordsLK,zernikeCoeffsLK) = extractWavefrontInfo(leakageHas)
+
+	return zernikeCoeffsIC-zernikeCoeffsLK
