@@ -28,7 +28,7 @@ def splitHASOFile(filename):
 
 
 
-def extractWavefrontInfo(dataFile):
+def extractWavefrontInfo(dataFile,verbose=False):
 	
 	# First split the HASO file into a wavefront
 	# and a pupil info file
@@ -46,7 +46,8 @@ def extractWavefrontInfo(dataFile):
 			nextFile = dataFile[i]
 		
 		splitHASOFile(nextFile)
-		print('Reading In File' + nextFile)
+		if verbose:
+			print('Reading In File' + nextFile)
 		# Read in the XML file
 		tree = ET.parse('Wavefront.xml')
 		root = tree.getroot()
@@ -100,6 +101,50 @@ def extractWavefrontInfo(dataFile):
 
 	
 	return (X,Y,phase,intensity,pupil,pupilCoords,zernikeCoeffs)
+
+def extractCalibratedWavefrontInfo(dataFile,calibrationFile,verbose=False):
+	# Given a data File and a calibration File, this function spits out a list of
+	# Zernike polynomials which can be used to correctly identify the wavefront
+	# at the interaction point from measurements on the leakage diagnostic table.
+
+	# The calibration file simply consists of a set of zernikes to be added to	
+	# main zernike list
+
+	# First extract the wavefront
+	(X,Y,phase,intensity,pupil,pupilCoords,zernikeCoeffs) = extractWavefrontInfo(dataFile,verbose=verbose)
+	zernikeOffsets = np.load(calibrationFile)
+
+	zernikes = zernikeCoeffs + zernikeOffsets
+
+	return zernikes
+
+def createCalibrationFile(inChamberHASDir,leakageHASDir,saveDir):
+	# Given a set of haso measurements from inside the chamber and from the leakage table
+	# This script will calculate the zernike offset between the two.
+	# Zernikes are used because they provide a reasonable way to output the data
+	# independant of fluctuations in beam size and in a format readily available for
+	# input into other codes. 
+
+
+	# Lets pull in the in-chamber files and get wavefront
+	files_C = os.listdir(inChamberHASDir)
+	for i in range(len(files_C)):
+		files_C[i] = os.path.join(inChamberHASDir,files_C[i])
+	(X_C,Y_C,phase_C,intensity_C,pupil_C,pupilCoords_C,zernikeCoeffs_C) = extractWavefrontInfo(files_C)
+
+	# Now the same for the files taken on the leakage diagnostic
+	files_L = os.listdir(leakageHASDir)
+	for i in range(len(files_L)):
+		files_L[i] = os.path.join(leakageHASDir,files_L[i])
+	(X_L,Y_L,phase_L,intensity_L,pupil_L,pupilCoords_L,zernikeCoeffs_L) = extractWavefrontInfo(files_L)
+
+	zernikeOffsets = zernikeCoeffs_C - zernikeCoeffs_L
+	savePath = os.path.join(saveDir,'HASOCalibration')
+	np.save(savePath,zernikeOffsets)
+
+	calibDetails = [inChamberHASDir,leakageHASDir]
+	savePath = os.path.join(saveDir,'HASOCalibrationPathsUSed')
+	np.save(savePath,calibDetails)
 
 def convertAsTextToArray(asTextArr):
     # Takes the raw input from the haso file

@@ -2,10 +2,12 @@
 import matplotlib.pyplot as plt
 import numpy as np 
 from scipy.signal import medfilt
-from ta2_hrr_analysisCode.sqlDatabase import connectToSQL
+from sqlDatabase import connectToSQL
+import logging
 
 # IMPORT DIAGNOSTIC CODES
-from ta2_hrr_analysisCode import SPIDERAnalysis
+import SPIDERAnalysis
+import HASOAnalysis
 
 # HELPER FUNCTIONS - COULD BE PLACED ELSEWHERE?
 def getSortedFolderItems(itemPath,key):
@@ -88,6 +90,10 @@ class dataRun:
 		# Data Information
 		self.runDate 			= runDate
 		self.runName 			= runName
+		loggingAnalysisFolder 	= self.createAnalysisFolder()
+		loggerFile 				= os.path.join(loggingAnalysisFolder,'analysisInfo.log')
+		logging.basicConfig(filename=loggerFile, filemode='w', format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S',level=logging.INFO)
+		self.logger 			= logging.getLogger('logFile')
 		self.diagList 			= self.findAvailableDiagnostics(runDate,runName)
 		datStyle, datShots, diagShotDict = self.runsOrBursts(runDate,runName,self.diagList)
 		self.datStyle 			= datStyle
@@ -110,6 +116,7 @@ class dataRun:
 		self.collectSQLData()
 
 
+
 	def findAvailableDiagnostics(self,runDate,runName):
 		# By following through the folder system, this will tell us what the diagnostics were for the run
 		baseDataFolder 	= self.baseDataFolder
@@ -125,6 +132,9 @@ class dataRun:
 		for diag in unavailableDiags:
 		    diagList.remove(diag)
 		
+		self.logger.info('\n\nList of Available Diagnostics for ' + os.path.join(runDate,runName) + '\n')
+		for element in diagList:
+				self.logger.info(element)
 		if self.verbose:
 			print('\n\nList of Available Diagnostics for ' + os.path.join(runDate,runName) + '\n')
 			for element in diagList:
@@ -227,9 +237,9 @@ class dataRun:
 		    gasCellPressure[shotOrBurst] = Pressure
 		    gasCellLength[shotOrBurst] = Length
 
-
-		self.saveData('GasCellPressure',gasCellPressure)
-		self.saveData('gasCellLength',gasCellLength)
+		analysisPath,isItReal = self.getDiagAnalysisPath('General')
+		self.saveData(os.path.join(analysisPath,'GasCellPressure'),gasCellPressure)
+		self.saveData(os.path.join(analysisPath,'gasCellLength'),gasCellLength)
 
 
 
@@ -263,7 +273,8 @@ class dataRun:
 	# SPIDER ANALYSIS CALLS -- THIS IS CURRENTLY JUST AN EXAMPLE
 	def getSpectralPhaseOrders(self):
 		diag = 'SPIDER'
-		filePathDict = createRunPathLists(diag)
+		filePathDict = self.createRunPathLists(diag)
+		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
 		for burstStr in filePathDict.keys():		
 			analysedData = SPIDERAnalysis.polyOrders(filePathDict[burstStr])
 			# Save the data
@@ -273,6 +284,24 @@ class dataRun:
 		# Print some shit to the log here. Someone to write function.
 
 		return 0
+
+	# HASO Analysis
+	def performHASOAnalysis(self,calibrationPath=None):
+		diag = 'HASO'
+		filePathDict = self.createRunPathLists(diag)
+		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
+		for burstStr in filePathDict.keys():		
+			if calibrationPath is None:
+				analysedData = HASOAnalysis.extractWavefrontInfo(filePathDict[burstStr])
+				# Save the data
+				analysisSavePath = os.path.join(analysisPath,burstStr,'waveFrontOnLeakage')
+				self.saveData(analysisSavePath,analysedData)
+			else:
+				analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(filePathDict[burstStr],calibrationPath)
+				# Save the data
+				analysisSavePath = os.path.join(analysisPath,burstStr,'calibratedWavefront')
+				self.saveData(analysisSavePath,analysedData)
+			print('Analysed HASO '+ burstStr)
 
 
 		
@@ -310,7 +339,7 @@ class dataRun:
 
 	def createRunPathLists(self,diag):
 		# Get RelevantPaths
-		analysisPath, analysisPathExists = self.getDiagAnalysisPath(diag)
+		# analysisPath, analysisPathExists = self.getDiagAnalysisPath(diag)
 		dataPath = self.getDiagDataPath(diag)
 		filePathDict = getShotFilePathDict(dataPath)
 		return filePathDict
@@ -427,21 +456,27 @@ class dataRun:
 	# -----								SAVING AND LOADING ANALYSED DATA 											-----
 	# -------------------------------------------------------------------------------------------------------------------
 
-	def saveData(self,dataName,data):
-		# Saves analysed Data 
-		baseAnalysisFolder = self.baseAnalysisFolder
-		runDate = self.runDate
-		runName = self.runName
+	#def saveData(self,dataName,data):
+	#	# Saves analysed Data 
+	#	baseAnalysisFolder = self.baseAnalysisFolder
+	#	runDate = self.runDate
+	#	runName = self.runName
 
+	#	# Check if the folder exists, bearing in mind that we might have an extra
+	#	# path in the dataName
+	#	fullFilePath = os.path.join(baseAnalysisFolder,runDate,runName,dataName)
+	#	# check if it exists
+	#	if os.path.exists(os.path.dirname(fullFilePath)) is not True:
+	#		os.mkdir(os.path.dirname(fullFilePath))
+
+	#	np.save(fullFilePath, data)
+
+	def saveData(self,path,data):
 		# Check if the folder exists, bearing in mind that we might have an extra
-		# path in the dataName
-		fullFilePath = os.path.join(baseAnalysisFolder,runDate,runName,dataName)
-		# check if it exists
-		if os.path.exists(os.path.dirname(fullFilePath)) is not True:
-			os.mkdir(os.path.dirname(fullFilePath))
-
-		np.save(fullFilePath, data)
-
+		dirName = os.path.dirname(path)
+		if os.path.exists(dirName) is not True:
+			os.makedirs(dirName)
+		np.save(path, data)
 
 	def saveRunObject(self):
 		baseAnalysisFolder = self.baseAnalysisFolder
