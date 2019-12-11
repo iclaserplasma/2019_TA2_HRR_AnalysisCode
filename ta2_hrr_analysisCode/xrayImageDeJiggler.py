@@ -58,6 +58,7 @@ class xrayDeJiggler:
     def findCenterByGP(self,img):
         model = self.model
         XY_test = self.XY_test
+        bounds = self.bounds
         nDims = 2
         nTest = 20
         x_samples = []
@@ -111,13 +112,12 @@ class xrayDeJiggler:
                 y_rot.append(0)
             elif imgCounts[sList[n]]>imgMeanThresh:
                 imgRef = mf(np.mean(imgComb,axis=0),mfSize)
-                self.imgReg = imgRef
-                x0_ind,y0_ind = self.indCenterByGP(img)
+                self.imgRef = imgRef
+                y0_ind,x0_ind = self.findCenterByGP(img)
                 xRoll = int(x0_ind)
                 yRoll = int(y0_ind)
                 x_rot.append(xRoll)
                 y_rot.append(yRoll)
-                img = alignImageToRef(img,xRoll,yRoll)
-                imgComb.append(img)
+                imgComb.append(alignImageToRef(img,xRoll,yRoll))
         
-        return imgComb
+        return imgComb, x_rot , y_rot
