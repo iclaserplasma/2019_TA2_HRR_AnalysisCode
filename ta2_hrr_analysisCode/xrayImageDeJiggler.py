@@ -3,19 +3,22 @@ from scipy.ndimage import median_filter as mf
 from sklearn.gaussian_process import GaussianProcessRegressor as GP
 from sklearn.gaussian_process.kernels import Matern, RBF, WhiteKernel
 
+
 def xcorrImages(imgTest,imgRef,corMfSize):
     imgCor = mf(np.abs(np.fft.fftshift(np.fft.ifft2(np.fft.fft2(imgTest)*np.conj(np.fft.fft2(imgRef))))),corMfSize)
     y0_ind,x0_ind = np.unravel_index(imgCor.argmax(), imgCor.shape)
     return x0_ind,y0_ind
 
-def alignImageToRef(imgTest,xRoll,yRoll):
+def shiftImage(imgTest,x):
     Ny,Nx = np.shape(imgTest)
-    imgTest = np.roll(imgTest,yRoll, axis=0)
-    imgTest = np.roll(imgTest,xRoll, axis=1)
+    imgTest = np.roll(imgTest,int(x[1]), axis=0)
+    imgTest = np.roll(imgTest,int(x[0]), axis=1)
     return imgTest
 
 def flatCorrectImage(img,darkfield,flatfield):
     return (img-darkfield)/(flatfield-darkfield)
+
+
 
 class xrayDeJiggler:
     def __init__(self,imgList=None,bounds=[[-50,50],[-50,50]],bkgImg=None, flatImg = None):
@@ -48,12 +51,9 @@ class xrayDeJiggler:
         
         self.model = GP(kernel)
 
-                
             
-
-
     def imgRollDiff(self,img,x):
-        return np.mean(((self.imgRef - alignImageToRef(img,int(x[1]),int(x[0])))[self.compRegion])**2)
+        return np.mean(((self.imgRef - shiftImage(img,x))[self.compRegion])**2)
 
     def findCenterByGP(self,img):
         model = self.model
@@ -113,11 +113,9 @@ class xrayDeJiggler:
             elif imgCounts[sList[n]]>imgMeanThresh:
                 imgRef = mf(np.mean(imgComb,axis=0),mfSize)
                 self.imgRef = imgRef
-                y0_ind,x0_ind = self.findCenterByGP(img)
-                xRoll = int(x0_ind)
-                yRoll = int(y0_ind)
-                x_rot.append(xRoll)
-                y_rot.append(yRoll)
-                imgComb.append(alignImageToRef(img,xRoll,yRoll))
+                x_opt = self.findCenterByGP(mf(img,mfSize))
+                x_rot.append(int(x_opt[0]))
+                y_rot.append(int(x_opt[1]))
+                imgComb.append(shiftImage(img,x_opt))
         
         return imgComb, x_rot , y_rot
