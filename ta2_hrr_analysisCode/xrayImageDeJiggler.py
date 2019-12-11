@@ -18,7 +18,7 @@ def flatCorrectImage(img,darkfield,flatfield):
     return (img-darkfield)/(flatfield-darkfield)
 
 class xrayDeJiggler:
-    def __init__(self,imgList=None,bounds=[[-50,50],[-50,50]],bkgImg =bkgImg, flatImg = flatImg):
+    def __init__(self,imgList=None,bounds=[[-50,50],[-50,50]],bkgImg=None, flatImg = None):
         self.imgRef = None
         self.compRegion = None
         self.beamRegion = None
