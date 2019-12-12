@@ -2,7 +2,7 @@ import numpy as np
 from scipy.ndimage import median_filter as mf
 from sklearn.gaussian_process import GaussianProcessRegressor as GP
 from sklearn.gaussian_process.kernels import Matern, RBF, WhiteKernel
-
+from ta2_hrr_analysisCode.gp_opt import BasicOptimiser_discrete  
 
 def xcorrImages(imgTest,imgRef,corMfSize):
     imgCor = mf(np.abs(np.fft.fftshift(np.fft.ifft2(np.fft.fft2(imgTest)*np.conj(np.fft.fft2(imgRef))))),corMfSize)
@@ -28,11 +28,7 @@ class xrayDeJiggler:
         self.bounds = bounds
         self.bkgImg = bkgImg
         self.flatImg = flatImg
-        if bounds is not None:
-            X,Y = np.meshgrid(np.arange(-50,51),np.arange(-50,51))
-            X=X.reshape(-1,1)
-            Y=Y.reshape(-1,1)
-            self.XY_test = np.concatenate((X,Y),axis=1)
+
         self.imgList = imgList
         if imgList is not None:
             self.Ny,self.Nx = np.shape(imgList[0])
@@ -47,45 +43,36 @@ class xrayDeJiggler:
 
         kernel =2**2 * RBF(length_scale=length_scale,length_scale_bounds=length_scale_bounds)
         kernel.k1.constant_value_bounds = (0.001,100)
-        kernel = kernel+WhiteKernel()
+        #kernel = kernel+WhiteKernel()
         
-        self.model = GP(kernel)
+        self.BO = BasicOptimiser_discrete(2, mean_cutoff=None,kernel=kernel, sample_scale=1, maximise_effort=1000, bounds=bounds,
+            scale=None, use_efficiency=True, fit_white_noise=True)
 
             
     def imgRollDiff(self,img,x):
         return np.mean(((self.imgRef - shiftImage(img,x))[self.compRegion])**2)
 
     def findCenterByGP(self,img):
-        model = self.model
-        XY_test = self.XY_test
+        BO = self.BO
         bounds = self.bounds
         nDims = 2
-        nTest = 20
-        x_samples = []
-        y_samples = []
+        nTest = 100
+
         for n in range(0,nTest):
             x_test=[]
             if n<5:
                 for nD in range(nDims):
                     r = max(bounds[nD]) - min(bounds[nD])
-                    x_test.append(np.random.rand()*r+min(bounds[nD]))
+                    x_test.append(int(np.random.rand()*r+min(bounds[nD])))
+                x_test = np.array(x_test)
             else:
-                y_pred,var_pred = model.predict(XY_test,return_std=True)
-                iTest = np.argmin(y_pred-2*var_pred)
-                for nD in range(nDims):
-                    x_test.append(XY_test[iTest,nD])
+                x_test = BO.ask(1e-20)
 
             y_val = self.imgRollDiff(img,x_test)
-            x_samples.append(x_test)
-            y_samples.append(y_val)
-            model.fit(x_samples,y_samples)
+            BO.tell(x_test,-y_val,y_val*0.002)
 
-        y_pred = model.predict(XY_test,return_std=False)
-        iTest = np.argmin(y_pred-2*var_pred)
-        x_opt = []
-        for nD in range(nDims):
-            x_opt.append(XY_test[iTest,nD])
-        return x_opt
+        best_pos, best_val = BO.optimum()
+        return best_pos
 
     def alignImgList(self):
         imgList = self.imgList
