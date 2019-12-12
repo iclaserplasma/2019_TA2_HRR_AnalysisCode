@@ -450,7 +450,9 @@ class BasicOptimiser_discrete:
 
         x = np.array(x).reshape(-1,self.n_dims)
         x = x.tolist()
-        
+        for x_s in self.x_samples:
+            x2 = [xi for xi in x if not xi==x_s.tolist()]
+            x = x2
         y = F(x)
         idx = np.nanargmax(y)
         return x[idx], y[idx]
@@ -486,7 +488,7 @@ class BasicOptimiser_discrete:
 
         best_pos, _ = self._maximise(self.Thresh)
 
-        best_val = self.model.predict(best_pos.reshape(1, -1))[0]
+        best_val = self.model.predict(np.array(best_pos).reshape(1, -1))[0]
 
         best_pos *= self.scale
 
