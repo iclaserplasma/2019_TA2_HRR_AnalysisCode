@@ -3,7 +3,7 @@ from scipy.ndimage import median_filter as mf
 from sklearn.gaussian_process import GaussianProcessRegressor as GP
 from sklearn.gaussian_process.kernels import Matern, RBF, WhiteKernel
 from ta2_hrr_analysisCode.gp_opt import BasicOptimiser_discrete  
-
+import sys
 def xcorrImages(imgTest,imgRef,corMfSize):
     imgCor = mf(np.abs(np.fft.fftshift(np.fft.ifft2(np.fft.fft2(imgTest)*np.conj(np.fft.fft2(imgRef))))),corMfSize)
     y0_ind,x0_ind = np.unravel_index(imgCor.argmax(), imgCor.shape)
@@ -34,7 +34,20 @@ class xrayDeJiggler:
             self.Ny,self.Nx = np.shape(imgList[0])
             self.X,self.Y = np.meshgrid(np.arange(self.Nx),np.arange(self.Ny))
 
-                
+         
+        #kernel = kernel+WhiteKernel()
+        
+        
+
+            
+    def imgRollDiff(self,img,x):
+        imgDiff =mf((self.imgRef-shiftImage(img,x))[self.compRegion],(9,9))
+   
+        return np.mean(imgDiff**2)
+
+
+    def findCenterByGP(self,img):
+               
         length_scale=[]
         length_scale_bounds=[]
         for n in range(2):
@@ -43,17 +56,9 @@ class xrayDeJiggler:
 
         kernel =2**2 * RBF(length_scale=length_scale,length_scale_bounds=length_scale_bounds)
         kernel.k1.constant_value_bounds = (0.001,100)
-        #kernel = kernel+WhiteKernel()
-        
-        self.BO = BasicOptimiser_discrete(2, mean_cutoff=None,kernel=kernel, sample_scale=1, maximise_effort=1000, bounds=bounds,
+
+        BO = BasicOptimiser_discrete(2, mean_cutoff=None,kernel=kernel, sample_scale=1, maximise_effort=1000, bounds=self.bounds,
             scale=None, use_efficiency=True, fit_white_noise=True)
-
-            
-    def imgRollDiff(self,img,x):
-        return np.mean(((self.imgRef - shiftImage(img,x))[self.compRegion])**2)
-
-    def findCenterByGP(self,img):
-        BO = self.BO
         bounds = self.bounds
         nDims = 2
         nTest = 100
@@ -94,15 +99,22 @@ class xrayDeJiggler:
             img = img/np.mean(img[self.beamRegion])
             if imgRef is None:
                 imgRef = mf(img,mfSize)
+                self.imgRef = imgRef
                 imgComb.append(img)
                 x_rot.append(0)
                 y_rot.append(0)
             elif imgCounts[sList[n]]>imgMeanThresh:
-                imgRef = mf(np.mean(imgComb,axis=0),mfSize)
-                self.imgRef = imgRef
+                sys.stdout.flush()
+                print(' Shot: ', sList[n], ' Number: ', n, '/', N ,'...', end='\r')
+
+    
+                #imgRef = mf(np.mean(imgComb,axis=0),mfSize)
+                #self.imgRef = imgRef
                 x_opt = self.findCenterByGP(mf(img,mfSize))
                 x_rot.append(int(x_opt[0]))
                 y_rot.append(int(x_opt[1]))
                 imgComb.append(shiftImage(img,x_opt))
+        sys.stdout.flush()
+        print('\r','Done')   
         
         return imgComb, x_rot , y_rot
