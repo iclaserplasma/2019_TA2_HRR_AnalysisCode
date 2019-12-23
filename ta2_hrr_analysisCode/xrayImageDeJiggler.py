@@ -75,6 +75,8 @@ class xrayDeJiggler:
 
         BO = BasicOptimiser_discrete(2, mean_cutoff=None,kernel=kernel, sample_scale=1, maximise_effort=1000, bounds=self.bounds,
             scale=None, use_efficiency=True, fit_white_noise=True)
+
+        BO.model.submodel_samples.kernel.k2.noise_level_bounds = [1e-10,10]
         bounds = self.bounds
         nDims = 2
         nTest = 50
