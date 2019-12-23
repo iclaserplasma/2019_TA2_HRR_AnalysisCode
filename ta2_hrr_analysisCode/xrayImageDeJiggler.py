@@ -41,7 +41,7 @@ class xrayDeJiggler:
 
             
     def imgRollDiff(self,img,x):
-        imgDiff =mf((self.imgRef-shiftImage(img,x))[self.compRegion],(9,9))
+        imgDiff =mf((self.imgRef-shiftImage(img,x))[self.compRegion],(3,3))
         dRMS = np.sqrt(np.mean(imgDiff**2))
         y = 1e5*np.exp(-(10*dRMS)**2)
         return y
@@ -73,7 +73,7 @@ class xrayDeJiggler:
         kernel =2**2 * RBF(length_scale=length_scale,length_scale_bounds=length_scale_bounds)
         kernel.k1.constant_value_bounds = (0.001,100)
 
-        BO = BasicOptimiser_discrete(2, mean_cutoff=None,kernel=kernel, sample_scale=1, maximise_effort=1000, bounds=self.bounds,
+        BO = BasicOptimiser_discrete(2, mean_cutoff=None,kernel=kernel, sample_scale=1, maximise_effort=100, bounds=self.bounds,
             scale=None, use_efficiency=True, fit_white_noise=True)
 
         BO.model.submodel_samples.kernel.k2.noise_level_bounds = [1e-10,10]
@@ -125,7 +125,7 @@ class xrayDeJiggler:
                 y_rot.append(0)
             elif imgCounts[sList[n]]>imgMeanThresh:
                 sys.stdout.flush()
-                print(' Shot: ', sList[n], ' Number: ', n, '/', N ,'...', end='\r')
+                print(' Shot: ', sList[n]+1, ' Number: ', n+1, '/', N ,'...', end='\r')
 
     
                 #imgRef = mf(np.mean(imgComb,axis=0),mfSize)
