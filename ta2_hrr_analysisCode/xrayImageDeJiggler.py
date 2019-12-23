@@ -42,9 +42,25 @@ class xrayDeJiggler:
             
     def imgRollDiff(self,img,x):
         imgDiff =mf((self.imgRef-shiftImage(img,x))[self.compRegion],(9,9))
-   
-        return np.mean(imgDiff**2)
+        dRMS = np.sqrt(np.mean(imgDiff**2))
+        y = 1e5*np.exp(-(10*dRMS)**2)
+        return y
 
+    def modelGridMax(self,BO,gridLims):
+        x = np.arange(gridLims[0][0],gridLims[0][1]+1)
+        y = np.arange(gridLims[1][0],gridLims[1][1]+1)
+        X,Y = np.meshgrid(x,y)
+        X=X.reshape(-1,1)
+        Y=Y.reshape(-1,1)
+        XY_test = np.concatenate((X,Y),axis=1)
+        Z_pred=[]
+        for xy in XY_test:
+            Z_pred.append(BO.model.submodel_samples.predict(xy.reshape(-1,2)))
+
+        Z_pred =np.array(Z_pred)
+        i_opt = np.argmax(Z_pred.flatten())
+        x_opt = [X[i_opt],Y[i_opt]]
+        return x_opt
 
     def findCenterByGP(self,img):
                
@@ -52,7 +68,7 @@ class xrayDeJiggler:
         length_scale_bounds=[]
         for n in range(2):
             length_scale.append(10)
-            length_scale_bounds.append([1,100])
+            length_scale_bounds.append([1,1000])
 
         kernel =2**2 * RBF(length_scale=length_scale,length_scale_bounds=length_scale_bounds)
         kernel.k1.constant_value_bounds = (0.001,100)
@@ -61,11 +77,11 @@ class xrayDeJiggler:
             scale=None, use_efficiency=True, fit_white_noise=True)
         bounds = self.bounds
         nDims = 2
-        nTest = 100
+        nTest = 50
 
         for n in range(0,nTest):
             x_test=[]
-            if n<5:
+            if n<10:
                 for nD in range(nDims):
                     r = max(bounds[nD]) - min(bounds[nD])
                     x_test.append(int(np.random.rand()*r+min(bounds[nD])))
@@ -77,7 +93,9 @@ class xrayDeJiggler:
             BO.tell(x_test,-y_val,y_val*0.002)
 
         best_pos, best_val = BO.optimum()
-        return best_pos
+        gridLims = [[(-10+best_pos[0]),(10+best_pos[0])],[(-10+best_pos[1]),(10+best_pos[1])]]
+        x_opt = self.modelGridMax(BO,gridLims)
+        return x_opt
 
     def alignImgList(self):
         imgList = self.imgList
