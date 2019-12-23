@@ -118,7 +118,7 @@ class xrayDeJiggler:
             img = flatCorrectImage(imgList[sList[n]],self.bkgImg,self.flatImg)
             img = img/np.mean(img[self.beamRegion])
             if imgRef is None:
-                imgRef = mf(img,mfSize)
+                imgRef = img
                 self.imgRef = imgRef
                 imgComb.append(img)
                 x_rot.append(0)
@@ -130,7 +130,7 @@ class xrayDeJiggler:
     
                 #imgRef = mf(np.mean(imgComb,axis=0),mfSize)
                 #self.imgRef = imgRef
-                x_opt = self.findCenterByGP(mf(img,mfSize))
+                x_opt = self.findCenterByGP(img)
                 x_rot.append(int(x_opt[0]))
                 y_rot.append(int(x_opt[1]))
                 imgComb.append(shiftImage(img,x_opt))
