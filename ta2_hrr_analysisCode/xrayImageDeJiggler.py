@@ -4,6 +4,25 @@ from sklearn.gaussian_process import GaussianProcessRegressor as GP
 from sklearn.gaussian_process.kernels import Matern, RBF, WhiteKernel
 from ta2_hrr_analysisCode.gp_opt import BasicOptimiser_discrete  
 import sys
+
+
+import mirage_analysis
+
+import ta2_hrr_2019.utils as utils
+utils.setup_mirage_analysis()
+def avgCounts(data):
+    return np.mean(data.astype(float)) # Return the sum of the pixels in each image
+def avgBurst(data):
+    return np.mean(data,axis=0) # Return the sum of the pixels in each image
+
+def null_fcn(data):
+    return data# Return the sum of the pixels in each image
+
+xray_pipeline = mirage_analysis.DataPipeline('XRay', null_fcn, null_fcn)
+xray_bkg_pipe = mirage_analysis.DataPipeline('XRay', null_fcn, avgBurst)
+xray_meanCounts_pipe = mirage_analysis.DataPipeline('XRay', avgCounts, avgBurst)
+
+
 def xcorrImages(imgTest,imgRef,corMfSize):
     imgCor = mf(np.abs(np.fft.fftshift(np.fft.ifft2(np.fft.fft2(imgTest)*np.conj(np.fft.fft2(imgRef))))),corMfSize)
     y0_ind,x0_ind = np.unravel_index(imgCor.argmax(), imgCor.shape)
@@ -99,7 +118,7 @@ class xrayDeJiggler:
         x_opt = self.modelGridMax(BO,gridLims)
         return x_opt
 
-    def alignImgList(self):
+    def alignImgList(self,use_existing_ref=False):
         imgList = self.imgList
         imgCounts = np.mean(np.mean(np.array(imgList),axis=2),axis=1)
         sList = np.argsort(imgCounts)[::-1]
@@ -108,6 +127,10 @@ class xrayDeJiggler:
         y_rot=[]
         imgComb=[]
         imgRef = None
+        if use_existing_ref:
+            if self.imgRef is not None:
+                imgRef = self.imgRef
+            
 
         imgMeanThresh = 200
 
@@ -138,3 +161,20 @@ class xrayDeJiggler:
         print('\r','Done')   
         
         return imgComb, x_rot , y_rot
+
+    def alignRun(self,bkgRunName,bkgBurst,flatRunName,flatBurst,imgRunName,imgBurstNumbers):
+        
+
+        bNum, bkgImage = xray_bkg_pipe.run(bkgRunName,bkgBurst)
+        bNum, flatImage = xray_bkg_pipe.run(flatRunName,flatBurst)
+
+        runImages = []
+        for bNum in imgBurstNumbers:
+            _, radioImages = xray_pipeline.run(imgRunName,bNum)
+            imgComb, x_rot , y_rot = self.alignImgList(use_existing_ref=True)
+            runImages = runImages +imgComb
+        return runImages
+
+
+
+            
