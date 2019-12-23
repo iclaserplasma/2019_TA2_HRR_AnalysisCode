@@ -92,8 +92,8 @@ class xrayDeJiggler:
                 x_test = BO.ask(1e-20)
 
             y_val = self.imgRollDiff(img,x_test)
-            BO.tell(x_test,-y_val,y_val*0.002)
-
+            BO.tell(x_test,y_val,y_val*0.05)
+        BO.maximise_effort=10000
         best_pos, best_val = BO.optimum()
         gridLims = [[(-10+best_pos[0]),(10+best_pos[0])],[(-10+best_pos[1]),(10+best_pos[1])]]
         x_opt = self.modelGridMax(BO,gridLims)
