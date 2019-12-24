@@ -171,7 +171,9 @@ class xrayDeJiggler:
         self.runImages = []
         for bNum in imgBurstNumbers:
             _, radioImages = xray_pipeline.run(imgRunName,bNum)
+            self.imgList = radioImages
             imgComb, x_rot , y_rot = self.alignImgList(use_existing_ref=True)
+            
             self.runImages = self.runImages +imgComb
         return self.runImages
 
