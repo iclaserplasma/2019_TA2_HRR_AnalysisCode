@@ -62,7 +62,7 @@ class xrayDeJiggler:
     def imgRollDiff(self,img,x):
         imgDiff =mf((self.imgRef-shiftImage(img,x))[self.compRegion],(3,3))
         dRMS = np.sqrt(np.mean(imgDiff**2))
-        y = 1e5*np.exp(-(10*dRMS)**2)
+        y = 1e1*np.exp(-(3*dRMS)**2)
         return y
 
     def modelGridMax(self,BO,gridLims):
@@ -90,7 +90,7 @@ class xrayDeJiggler:
             length_scale_bounds.append([1,1000])
 
         kernel =2**2 * RBF(length_scale=length_scale,length_scale_bounds=length_scale_bounds)
-        kernel.k1.constant_value_bounds = (0.001,100)
+        kernel.k1.constant_value_bounds = (0.001,10000)
 
         BO = BasicOptimiser_discrete(2, mean_cutoff=None,kernel=kernel, sample_scale=1, maximise_effort=100, bounds=self.bounds,
             scale=None, use_efficiency=True, fit_white_noise=True)
@@ -111,7 +111,7 @@ class xrayDeJiggler:
                 x_test = BO.ask(1e-20)
 
             y_val = self.imgRollDiff(img,x_test)
-            BO.tell(x_test,y_val,y_val*0.05)
+            BO.tell(x_test,y_val,y_val*0.01)
         BO.maximise_effort=10000
         best_pos, best_val = BO.optimum()
         gridLims = [[(-10+best_pos[0]),(10+best_pos[0])],[(-10+best_pos[1]),(10+best_pos[1])]]
