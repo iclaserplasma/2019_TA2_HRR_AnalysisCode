@@ -168,12 +168,12 @@ class xrayDeJiggler:
         bNum, bkgImage = xray_bkg_pipe.run(bkgRunName,bkgBurst)
         bNum, flatImage = xray_bkg_pipe.run(flatRunName,flatBurst)
 
-        runImages = []
+        self.runImages = []
         for bNum in imgBurstNumbers:
             _, radioImages = xray_pipeline.run(imgRunName,bNum)
             imgComb, x_rot , y_rot = self.alignImgList(use_existing_ref=True)
-            runImages = runImages +imgComb
-        return runImages
+            self.runImages = self.runImages +imgComb
+        return self.runImages
 
 
 
