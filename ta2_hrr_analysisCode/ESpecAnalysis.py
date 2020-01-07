@@ -70,7 +70,6 @@ def loadMatFile(SettingPath, FileName, VariableName):
             print('Warning! Variable %s does not exist in the calibration file. Setting it to 0 ->' % VariableName[i])
             # This is a fix for now. Simply, because previous calibration files did not contain CutOff, not
             # BackgroundNoise. And it is weirdly saved (it has to be done by CutOff = CutOff[0][0] later. Therefore:
-            TempVariable
             Variable.append([[0]])
     return Variable
 
