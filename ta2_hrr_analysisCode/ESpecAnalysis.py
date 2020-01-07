@@ -103,7 +103,7 @@ def extractCharge(FileList, CalibrationFilePath):
 
 
 def analyseImage(rawImage, calibrationTupel):
-    J, W, pts, E, dxoverdE, BckgndImage, L, CutOff, BackgroundNoise = calibrationTupel
+    J, W, pts, E, dxoverdE, BackgroundImage, L, CutOff, BackgroundNoise = calibrationTupel
     # preparation of the calibration parameter (later move into the calibration prep above)
     # The cut off is an index, which indicates, where the calibration between image plate and camera image did not work.
     # This was due to a camera artifact (an imaging problem with the perplex glass)
