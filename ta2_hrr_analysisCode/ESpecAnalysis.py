@@ -152,13 +152,21 @@ def getCalibrationFileHardCoded(runName):
     # well just be sufficient enough for this experiment. The only variable of this is potentially the background noise.
     # However there is no physical evidence that this changed between the different days.
     if isinstance(runName, str):
-        runNameAccumulate = runName[0]
-        walkThrough = 1
-        while walkThrough <= len(runName):
+        if "\\" in r"%r" % runName:
+            # This has to be done, because a backslash is a special character and cannot be identified
+            # otherwise. However the line below introduces not only "\\" (which can be identified), but
+            # also " ' " in front (and in the back) of the string, which needs to be skipped.
+            runName = r"%r" % runName
+            walkThrough = 1
+        else:
+            walkThrough = 0
+        runNameAccumulate = runName[walkThrough]
+        walkThrough += 1
+        while walkThrough < len(runName):
             if runName[walkThrough] == '/' or runName[walkThrough] == '\\' :
                 break
-            runNameAccumulate += runNameAccumulate[walkThrough]
-            walkThrough += walkThrough
+            runNameAccumulate += runName[walkThrough]
+            walkThrough += 1
         runName = float(runNameAccumulate)
     if 20190719 <= runName:
         CalibrationFile = 'July2019'
