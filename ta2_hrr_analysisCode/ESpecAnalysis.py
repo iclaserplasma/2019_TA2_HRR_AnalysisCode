@@ -11,7 +11,6 @@ import scipy.io
 import numpy as np
 import cv2
 
-
 '''
 Start the new code here ->
 '''
@@ -65,7 +64,11 @@ def loadMatFile(SettingPath, FileName, VariableName):
     VabiableLibrary = scipy.io.loadmat(PathToLoad)
     Variable = []
     for i in range(0, len(VariableName)):
-        Variable.append(VabiableLibrary[VariableName[i]])
+        if VariableName[i] in VabiableLibrary:
+            Variable.append(VabiableLibrary[VariableName[i]])
+        else:
+            print('Warning! Variable %s does not exist in the calibration file. Setting it to 0 ->' % VariableName[i])
+            Variable.append(0)
     return Variable
 
 
@@ -103,12 +106,12 @@ def analyseImage(rawImage, calibrationTupel):
     # The cut off is an index, which indicates, where the calibration between image plate and camera image did not work.
     # This was due to a camera artifact (an imaging problem with the perplex glass)
     CutOff = CutOff[0][0]
-#    Energy = E.T[self.CutOff:, :]
+    #    Energy = E.T[self.CutOff:, :]
     # the following parameters will be cut only if they are intended to be used.
-#    Length = L[:, self.CutOff:]
-#    dxoverdE = dxoverdE[:, self.CutOff:]  # MIGHT BE WRONG
-#    BackgroundImage = BckgndImage[:, self.CutOff:]
-#    BackgroundNoise = BackgroundNoise[:, self.CutOff:]
+    #    Length = L[:, self.CutOff:]
+    #    dxoverdE = dxoverdE[:, self.CutOff:]  # MIGHT BE WRONG
+    #    BackgroundImage = BckgndImage[:, self.CutOff:]
+    #    BackgroundNoise = BackgroundNoise[:, self.CutOff:]
 
     # here hard coded: the analysis of the image plates yield to a count to fC calibration of:
     fCperCounts = 2.7e-3
@@ -124,7 +127,7 @@ def analyseImage(rawImage, calibrationTupel):
     Spectrum = electronSpectrum(WarpedImageWithoutBckgnd, dxoverdE, L)
     ChargeInCounts = np.trapz(Spectrum.T, E.T)  # correct integration of the entire image
     Charge = ChargeInCounts * fCperCounts  # Charge in fC
-    Spectrum = Spectrum[:, self.CutOff:]  # cutting off the low energy bit as described above
+    Spectrum = Spectrum[:, CutOff:]  # cutting off the low energy bit as described above
     Spectrum = Spectrum * fCperCounts  # changing the units from counts/MeV -> fC/MeV
     return Spectrum, Charge
 
@@ -163,7 +166,7 @@ def getCalibrationFileHardCoded(runName):
         runNameAccumulate = runName[walkThrough]
         walkThrough += 1
         while walkThrough < len(runName):
-            if runName[walkThrough] == '/' or runName[walkThrough] == '\\' :
+            if runName[walkThrough] == '/' or runName[walkThrough] == '\\':
                 break
             runNameAccumulate += runName[walkThrough]
             walkThrough += 1
