@@ -482,7 +482,7 @@ class dataRun:
 		baseAnalysisFolder = self.baseAnalysisFolder
 		runDate = self.runDate
 		runName = self.runName
-		np.save(os.path.join(baseAnalysisFolder,runDate,runName,'runObject'), self)
+		np.save(os.path.join(baseAnalysisFolder,'General',runDate,runName,'runObject'), self)
 
 	
 	
