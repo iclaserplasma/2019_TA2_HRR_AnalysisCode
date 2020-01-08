@@ -40,7 +40,17 @@ def ImportImageFiles(FileList):
 
 def getCalibrationParameter(CalibrationFilePath):
     """
-    Define paths and constanst here. It will later be simply loaded. The
+    The calibration files in the folder defined by "CalibrationFilePath" can be loaded with this function.
+    The output is a tupel, containing all important parameter:
+    J               Jacobian matrix for the correct normalisation of the warping of the espec image
+    W               Width of the camera image in mm
+    pts             The four points, which are used to warp the image and make it flat
+    E               Energy information of the length of the lanex screen
+    dxoverdE        For later to change the units of the lanex screen between mm to MeV
+    BckgndImage     Taken previous to subtract from the image
+    L               Length of the lanex. This is the energy dependend axis. In mm.
+    CutOff          Beginning of the lanex screen has imaging artifacts and doesn't contain real data. Its simply cut.
+    BackgroundNoise Std of the background images (to put the noise level of the image into statistic relevant context.
     """
     ImageWarpingFile = 'CalibrationParamters.mat'
     ImageWarpingVariable = ['Jacobian', 'Length', 'Width', 'pts', 'BckgndImage', 'CutOff', 'BackgroundNoise']
@@ -121,10 +131,7 @@ def analyseImage(rawImage, calibrationTupel):
 
     # now to the analysis:
     image = rawImage.astype(float)
-    WarpedImage, __ = four_point_transform(image, pts, J)  # warp the image
-    WarpedImage = np.fliplr(WarpedImage)  # the axis is flipped (high and low energy)
-    WarpedImage = WarpedImage[:, CutOff:]  # as mentioned above, the low energy part needs to be removed due artifacts
-    WarpedImageWithoutBckgnd = WarpedImage - BackgroundImage  # background subtraction
+    WarpedImageWithoutBckgnd = imageTransformation(image, calibrationTupel)
     # correctly integrating the spectrum and change the units from counts/mm -> counts/MeV
     Spectrum = electronSpectrum(WarpedImageWithoutBckgnd, dxoverdE, L)
     ChargeInCounts = np.trapz(Spectrum.T, E.T)  # correct integration of the entire image
@@ -133,6 +140,15 @@ def analyseImage(rawImage, calibrationTupel):
     Spectrum = Spectrum * fCperCounts  # changing the units from counts/MeV -> fC/MeV
     return Spectrum, Charge
 
+
+def imageTransformation(image, calibrationTupel):
+    J, _, pts, _, _, BackgroundImage, _, CutOff, _ = calibrationTupel
+    CutOff = CutOff[0][0]
+    WarpedImage, __ = four_point_transform(image, pts, J)  # warp the image
+    WarpedImage = np.fliplr(WarpedImage)  # the axis is flipped (high and low energy)
+    WarpedImage = WarpedImage[:, CutOff:]  # as mentioned above, the low energy part needs to be removed due artifacts
+    WarpedImageWithoutBckgnd = WarpedImage - BackgroundImage  # background subtraction
+    return WarpedImageWithoutBckgnd
 
 def electronSpectrum(Image, dxoverdE, L):
     '''
