@@ -163,8 +163,8 @@ for this version of code (v0.1 20200106)
 # This second function is the main function:
 
 
-def changeFileEntry(NewEntry, runName, basePath=r'Z:\\'):
-    csvFile = os.path.join(basePath, 'Calibration', 'Cali.csv')  # change to the correct name
+def changeFileEntry(NewEntry, runName, calPath=r'Y:\\ProcessedCalibrations'):
+    csvFile = os.path.join(calPath, 'CalibrationPaths.csv')  # change to the correct name
     TotalFile = csv.reader(open(csvFile))
     entries = list(TotalFile)
     diagnostic = 'HighESpec'
@@ -187,8 +187,7 @@ def changeFileEntry(NewEntry, runName, basePath=r'Z:\\'):
     print('Change %s of diagnostic %s to: %s. Previously it was %s' % (runName, diagnostic, NewEntry, oldEntry))
 
 
-def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='C:\\Users\\laserplasma\\Experiments\\TA2_HRR_2019'
-                                                                 '\\ProcessedCalibrations', BackgroundImage=0,
+def createNewCalibrationFiles2(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedCalibrations', BackgroundImage=0,
                               BackgroundNoise=0):
     runPath = os.path.join(basePath, 'MIRAGE', 'HighESpec', runName)
     imageFolderPath = simpleFolderFinder(runPath)
@@ -218,27 +217,27 @@ def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='C:\\Users\\las
     #  since the image size might have varied during the day.
     foundDarkfields = 0
     runDate = convertRunNameToDate(runName)
-    backgroundPath = os.path.join(basePath, 'MIRAGE', str(runDate), 'darkfield01')
+    backgroundPath = os.path.join(basePath, 'MIRAGE', 'HighESpec', '%d' % runDate, 'darkfield01')
     if not os.path.exists(backgroundPath):
-        print('WARNING! No darkfields were found. The calibration database will be updated, but the background image '
+        print('WARNING E1: No darkfields were found. The calibration database will be updated, but the background image '
               'is missing.')
     else:
         backgroundImagesPath = simpleFolderFinder(backgroundPath)
         FileList = TupelOfFiles(backgroundImagesPath)
         testBackground = ImportImageFiles([FileList[0]])
-        if testImage.shape[0] is not testBackground.shape[0]:
-            backgroundPath = os.path.join(basePath, 'MIRAGE', str(runDate), 'darkfield02')
+        if testImage.shape[0] != testBackground.shape[0]:
+            backgroundPath = os.path.join(basePath, 'MIRAGE', 'HighESpec', '%d' % runDate, 'darkfield02')
             if not os.path.exists(backgroundPath):
                 print(
-                    'WARNING! No darkfields with the right image dimensions were found. The calibration database will '
+                    'WARNING E2: No darkfields with the right image dimensions were found. The calibration database will '
                     'be updated, but the background image is missing.')
             else:
                 backgroundImagesPath = simpleFolderFinder(backgroundPath)
                 FileList = TupelOfFiles(backgroundImagesPath)
                 testBackground = ImportImageFiles([FileList[0]])
-                if testImage.shape[0] is not testBackground.shape[0]:
+                if testImage.shape[0] != testBackground.shape[0]:
                     print(
-                        'WARNING! No darkfields with the right image dimensions were found. The calibration database '
+                        'WARNING E3: No darkfields with the right image dimensions were found. The calibration database '
                         'will be updated, but the background image is missing.')
                 else:
                     foundDarkfields = 1
@@ -253,13 +252,13 @@ def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='C:\\Users\\las
     totalCalibrationFilePath = os.path.join(calPath, 'HighEspec', '%d' % runDate)
     if not os.path.exists(totalCalibrationFilePath):
         os.mkdir(totalCalibrationFilePath)
-    simpleRunName = runName[8:]
+    simpleRunName = runName[9:]
     calFile = os.path.join(totalCalibrationFilePath, simpleRunName)
-
     calibrationTupel = (J, W, pts, E, dxoverdE, BackgroundImage, L, CutOff, BackgroundNoise)
     np.save(calFile, calibrationTupel)
     #  the entry for the database is a relative path:
     relPathForDatabase = os.path.join('HighESpec', '%d' % runDate, '%s.npy' % simpleRunName)
+    changeFileEntry(relPathForDatabase, runName, calPath)
     return relPathForDatabase
 
 
