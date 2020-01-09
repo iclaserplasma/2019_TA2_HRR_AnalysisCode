@@ -30,8 +30,11 @@ def simpleFolderFinder(runPath):
             if files.endswith(endings):
                 flag = 1
     if flag == 0:
-        newPath = os.path.join(runPath, subdirectoryForLater)
-        runPath = simpleFolderFinder(newPath)
+        if subdirectoryForLater is not 0:
+            newPath = os.path.join(runPath, subdirectoryForLater)
+            runPath = simpleFolderFinder(newPath)
+        else:
+            runPath = 0
     return runPath
 
 
@@ -70,52 +73,6 @@ def ImportImageFiles(FileList):
     return Images
 
 
-def getCalibrationParameter(CalibrationFilePath):
-    """
-    The calibration files in the folder defined by "CalibrationFilePath" can be loaded with this function.
-    The output is a tupel, containing all important parameter:
-    J               Jacobian matrix for the correct normalisation of the warping of the espec image
-    W               Width of the camera image in mm
-    pts             The four points, which are used to warp the image and make it flat
-    E               Energy information of the length of the lanex screen
-    dxoverdE        For later to change the units of the lanex screen between mm to MeV
-    BckgndImage     Taken previous to subtract from the image
-    L               Length of the lanex. This is the energy dependend axis. In mm.
-    CutOff          Beginning of the lanex screen has imaging artifacts and doesn't contain real data. Its simply cut.
-    BackgroundNoise Std of the background images (to put the noise level of the image into statistic relevant context.
-    """
-    ImageWarpingFile = 'CalibrationParamters.mat'
-    ImageWarpingVariable = ['Jacobian', 'Length', 'Width', 'pts', 'BckgndImage', 'CutOff', 'BackgroundNoise']
-    CompleteSetVar = loadMatFile(CalibrationFilePath, ImageWarpingFile, ImageWarpingVariable)
-    J, L, W, pts, BckgndImage, CutOff, BackgroundNoise = CompleteSetVar
-    ImageWarpingFile = 'PositionVsEnergy.mat'
-    ImageWarpingVariable = ['Screen', 'EnergyOnAverage']
-    ScreenEnergyOnAverage = loadMatFile(CalibrationFilePath, ImageWarpingFile, ImageWarpingVariable)
-    Screen, EnergyOnAverage = ScreenEnergyOnAverage
-    Screen = Screen * 1e3  # in mm
-    poly3 = np.poly1d(np.polyfit(Screen[0, :], EnergyOnAverage[0, :], 3))
-    E = poly3(L)
-    dpoly3 = np.polyder(poly3)
-    dEoverdx = dpoly3(L)
-    dxoverdE = 1 / dEoverdx
-    return J, W, pts, E, dxoverdE, BckgndImage, L, CutOff, BackgroundNoise
-
-
-def loadMatFile(SettingPath, FileName, VariableName):
-    PathToLoad = os.path.join(SettingPath, FileName)
-    VabiableLibrary = scipy.io.loadmat(PathToLoad)
-    Variable = []
-    for i in range(0, len(VariableName)):
-        if VariableName[i] in VabiableLibrary:
-            Variable.append(VabiableLibrary[VariableName[i]])
-        else:
-            print('Warning! Variable %s does not exist in the calibration file. Setting it to 0 ->' % VariableName[i])
-            # This is a fix for now. Simply, because previous calibration files did not contain CutOff, not
-            # BackgroundNoise. And it is weirdly saved (it has to be done by CutOff = CutOff[0][0] later. Therefore:
-            Variable.append([[0]])
-    return Variable
-
-
 def extractSpectrum(FileList, CalibrationFilePath):
     Images = ImportImageFiles(FileList)
     calibrationTupel = getCalibrationParameter(CalibrationFilePath)
@@ -149,7 +106,6 @@ def analyseImage(rawImage, calibrationTupel):
     # preparation of the calibration parameter (later move into the calibration prep above)
     # The cut off is an index, which indicates, where the calibration between image plate and camera image did not work.
     # This was due to a camera artifact (an imaging problem with the perplex glass)
-    CutOff = CutOff[0][0]
     #    Energy = E.T[self.CutOff:, :]
     # the following parameters will be cut only if they are intended to be used.
     #    Length = L[:, self.CutOff:]
@@ -175,7 +131,6 @@ def analyseImage(rawImage, calibrationTupel):
 
 def imageTransformation(image, calibrationTupel):
     J, _, pts, _, _, BackgroundImage, _, CutOff, _ = calibrationTupel
-    CutOff = CutOff[0][0]
     WarpedImage, __ = four_point_transform(image, pts, J)  # warp the image
     WarpedImage = np.fliplr(WarpedImage)  # the axis is flipped (high and low energy)
     WarpedImage = WarpedImage[:, CutOff:]  # as mentioned above, the low energy part needs to be removed due artifacts
@@ -209,7 +164,7 @@ for this version of code (v0.1 20200106)
 
 
 def changeFileEntry(NewEntry, runName, basePath=r'Z:\\'):
-    csvFile = os.path.join(basePath, 'Calibration', 'Cali.csv') # change to the correct name
+    csvFile = os.path.join(basePath, 'Calibration', 'Cali.csv')  # change to the correct name
     TotalFile = csv.reader(open(csvFile))
     entries = list(TotalFile)
     diagnostic = 'HighESpec'
@@ -232,17 +187,17 @@ def changeFileEntry(NewEntry, runName, basePath=r'Z:\\'):
     print('Change %s of diagnostic %s to: %s. Previously it was %s' % (runName, diagnostic, NewEntry, oldEntry))
 
 
-def createNewCalibrationFiles(runName, basePath=r'Z:\\'):
+def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='C:\\Users\\laserplasma\\Experiments\\TA2_HRR_2019'
+                                                                 '\\ProcessedCalibrations', BackgroundImage=0,
+                              BackgroundNoise=0):
     runPath = os.path.join(basePath, 'MIRAGE', 'HighESpec', runName)
     imageFolderPath = simpleFolderFinder(runPath)
     FileList = TupelOfFiles(imageFolderPath)
     testImage = ImportImageFiles([FileList[0]])
     if testImage.shape[0] < 1216:
-        SizeIndicator = 'S'
         pts = np.array([[40, 659 - 328], [41, 380 - 328], [1905, 389 - 328],
                         [1907, 637 - 328]])  # this was after we cropped the image (> 13. September)
     else:
-        SizeIndicator = 'L'
         pts = np.array(
             [[40, 659], [41, 380], [1905, 389], [1907, 637]])  # this was before we cropped the image (< 11.September)
     Length = 350 - 120
@@ -258,24 +213,83 @@ def createNewCalibrationFiles(runName, basePath=r'Z:\\'):
     PixelWidth = WarpedImage.shape[0]
     W = np.arange(0, PixelWidth) - round(PixelWidth / 2)
     W = W / PixelWidth * Width
-
-    SavePath = os.path.join(basePath, 'Calibrations', 'HighESpec')
-    CalibrationFilePath = os.path.join(SavePath, 'CalibrationParamters', '%s.mat' % SizeIndicator)
-    if not os.path.exists(CalibrationFilePath):
-        scipy.io.savemat(CalibrationFilePath, {'Jacobian': J, 'Length': L, 'Width': W, 'pts': pts, 'CutOff': CutOff})
-
-    #  2) The background image should be done per day. Save the background image with its date.
-    #  In the future, the two cases below might require additional coding:
-    #  2.1) Even per day it could occur that the saved format is wrong. -> Check if size is correct, if not, try another
-    #  2.2) Save the background image with its appending number and scan through if necessary
-
-    # Case 2)
-    BckgndImage, BackgroundNoise = backgroundImages(BackgroundPath, J, pts)
+    #  Darkfields:
+    #  The first section is to find the darkfields of the specific day. It might be that there were two sets of that day
+    #  since the image size might have varied during the day.
+    foundDarkfields = 0
     runDate = convertRunNameToDate(runName)
-    BackgroundSavePath = os.path.join(SavePath, 'Darkfields', '%sBackground.mat' % runDate)
-    scipy.io.savemat(BackgroundSavePath, {'BckgndImage': BckgndImage, 'BackgroundNoise': BackgroundNoise})
-    entryForCalibrationDatabase = '%s%d' % (SizeIndicator, runDate)
-    return entryForCalibrationDatabase
+    backgroundPath = os.path.join(basePath, 'MIRAGE', str(runDate), 'darkfield01')
+    if not os.path.exists(backgroundPath):
+        print('WARNING! No darkfields were found. The calibration database will be updated, but the background image '
+              'is missing.')
+    else:
+        backgroundImagesPath = simpleFolderFinder(backgroundPath)
+        FileList = TupelOfFiles(backgroundImagesPath)
+        testBackground = ImportImageFiles([FileList[0]])
+        if testImage.shape[0] is not testBackground.shape[0]:
+            backgroundPath = os.path.join(basePath, 'MIRAGE', str(runDate), 'darkfield02')
+            if not os.path.exists(backgroundPath):
+                print(
+                    'WARNING! No darkfields with the right image dimensions were found. The calibration database will '
+                    'be updated, but the background image is missing.')
+            else:
+                backgroundImagesPath = simpleFolderFinder(backgroundPath)
+                FileList = TupelOfFiles(backgroundImagesPath)
+                testBackground = ImportImageFiles([FileList[0]])
+                if testImage.shape[0] is not testBackground.shape[0]:
+                    print(
+                        'WARNING! No darkfields with the right image dimensions were found. The calibration database '
+                        'will be updated, but the background image is missing.')
+                else:
+                    foundDarkfields = 1
+        else:
+            foundDarkfields = 1
+    if foundDarkfields:
+        BackgroundImage, BackgroundNoise = backgroundImages(backgroundImagesPath, J, pts)
+    #  now loading the right magnet map
+    FileLocation = os.path.join(basePath, 'Calibrations', 'HighESpec')
+    E, dxoverdE = getEnergyTransformation(FileLocation, L)
+
+    totalCalibrationFilePath = os.path.join(calPath, 'HighEspec', '%d' % runDate)
+    if not os.path.exists(totalCalibrationFilePath):
+        os.mkdir(totalCalibrationFilePath)
+    simpleRunName = runName[8:]
+    calFile = os.path.join(totalCalibrationFilePath, simpleRunName)
+
+    calibrationTupel = (J, W, pts, E, dxoverdE, BackgroundImage, L, CutOff, BackgroundNoise)
+    np.save(calFile, calibrationTupel)
+    #  the entry for the database is a relative path:
+    relPathForDatabase = os.path.join('HighESpec', '%d' % runDate, '%s.npy' % simpleRunName)
+    return relPathForDatabase
+
+
+def getEnergyTransformation(FileLocation, L):
+    ImageWarpingFile = 'PositionVsEnergy.mat'
+    ImageWarpingVariable = ['Screen', 'EnergyOnAverage']
+    ScreenEnergyOnAverage = loadMatFile(FileLocation, ImageWarpingFile, ImageWarpingVariable)
+    Screen, EnergyOnAverage = ScreenEnergyOnAverage
+    Screen = Screen * 1e3  # in mm
+    poly3 = np.poly1d(np.polyfit(Screen[0, :], EnergyOnAverage[0, :], 3))
+    E = poly3(L)
+    dpoly3 = np.polyder(poly3)
+    dEoverdx = dpoly3(L)
+    dxoverdE = 1 / dEoverdx
+    return E, dxoverdE
+
+
+def loadMatFile(SettingPath, FileName, VariableName):
+    PathToLoad = os.path.join(SettingPath, FileName)
+    VabiableLibrary = scipy.io.loadmat(PathToLoad)
+    Variable = []
+    for i in range(0, len(VariableName)):
+        if VariableName[i] in VabiableLibrary:
+            Variable.append(VabiableLibrary[VariableName[i]])
+        else:
+            print('Warning! Variable %s does not exist in the calibration file. Setting it to 0 ->' % VariableName[i])
+            # This is a fix for now. Simply, because previous calibration files did not contain CutOff, not
+            # BackgroundNoise. And it is weirdly saved (it has to be done by CutOff = CutOff[0][0] later. Therefore:
+            Variable.append([[0]])
+    return Variable
 
 
 def convertRunNameToDate(runName):
@@ -299,21 +313,20 @@ def convertRunNameToDate(runName):
     return runName
 
 
-def getCalibrationFileHardCoded(runName):
-    # this is from the experiment and not flexible. It might be better to change that in the future, but this might as
-    # well just be sufficient enough for this experiment. The only variable of this is potentially the background noise.
-    # However there is no physical evidence that this changed between the different days.
-    runName = convertRunNameToDate(runName)
-    if 20190719 <= runName:
-        CalibrationFile = 'July2019'
-    if 20190801 <= runName:
-        CalibrationFile = 'August2019'
-    if 20190901 <= runName:
-        CalibrationFile = 'September2019'
-    if 20190911 <= runName:
-        CalibrationFile = 'October2019'
-    CalibrationFilePath = os.path.join(*['Calibrations', 'HighESpec', CalibrationFile])
-    return CalibrationFilePath
+def backgroundImages(Path, J, pts):
+    if len(Path) > 0:
+        FileList = TupelOfFiles(Path)
+        BackgroundImages = ImportImageFiles(FileList)
+        BackgroundImage = np.mean(BackgroundImages, axis=2)
+        BackgroundNoise = np.std(BackgroundImages, axis=2)
+        WarpedBackgroundImage, ___ = four_point_transform(BackgroundImage, pts, J)
+        BackgroundNoise, ___ = four_point_transform(BackgroundNoise, pts, J)
+        WarpedBackgroundImage = np.fliplr(WarpedBackgroundImage)
+        BackgroundNoise = np.flip(BackgroundNoise)
+    else:
+        WarpedBackgroundImage = 0
+        BackgroundNoise = 0
+    return WarpedBackgroundImage, BackgroundNoise
 
 
 '''
@@ -500,85 +513,6 @@ def uint16ToDoubleJ2(J2, UintConversion):
     return J2
 
 
-def calibrationFunction(ImagePath, BackgroundPath, SavePath, Mode="HighESpec"):
-    """
-    This can be run to sort out all the calibrations needed. It requires some manual analysis:
-    ImagePath conatins the images (with the spatial features)
-    BackgroundPath is the path containing background images
-    SavePath is the calibration folder
-
-    pts: are the points, which are taken at the corners on the edges of the spectrometer screen to flatten.
-    Length: mm length of the espec screen, manually analised (= m. a.)
-    Width: mm width of the espec screen (m. a.)
-    CentrePoint: point where the tape is a "CentrePointDistance" away from the start of the tape (m. a.)
-    CentrePointDistance: distance from start of lanex to centre point in mm (m. a.)
-
-    Steps to do this recommended:
-    1) Find the pts with matlab or imageJ
-    2) Make Sure there is an image with spatial information in the folder of this script. Alternatively add the
-        file path in the line FileList = TupelOfFiles(<input path>) as an input argument.
-    3) run this script to save a warped image (currently saved as .mat file, but adjust as pleased)
-    4) manual find the CentrePoint
-    5) Length, Width, CentrePointDistance should be measured from the experimental set-up
-    6) A calibration file will be save in "Settings" containing all the important parameters and the path needs
-        to be change in the function "constantsDefinitions():"
-    +) The path of the background images need to be defined. Otherwise the code just subtracts 0
-    :return:
-    """
-    if Mode == "HighESpec":
-        #  HighESpec:
-        pts = np.array(
-            [[40, 659], [41, 380], [1905, 389], [1907, 637]])  # this was before we cropped the image (September)
-        pts = np.array([[40, 659 - 328], [41, 380 - 328], [1905, 389 - 328],
-                        [1907, 637 - 328]])  # this was before we cropped the image (late September)
-        Length = 350 - 120
-        Width = 30
-        ScreenStart = 120
-        CutOff = 300
-        # CentrePoint (for manual calibration) 255 mm from the screen start and it ends at 370 mm
-    elif Mode == "ESpec":
-        pts = np.array([[9, 276], [11, 168], [646, 179], [646, 269]])
-        Length = 260 - 15
-        Width = 30
-        ScreenStart = 15
-        CutOff = 0
-
-    FileList = TupelOfFiles(ImagePath)
-    ImageWithSpatialPattern = ImportImageFiles(FileList)
-
-    WarpedImage, M = four_point_transform(ImageWithSpatialPattern[:, :, 0], pts)
-    WarpedImage = np.fliplr(WarpedImage)
-    scipy.io.savemat(os.path.join(SavePath, 'WarpedImage.mat'), {'WarpedImage': ImageWithSpatialPattern})
-    J, L = getJacobianAndSpatialCalibration(ImageWithSpatialPattern[:, :, 0].shape, WarpedImage.shape, M, Length,
-                                            ScreenStart)
-    PixelWidth = WarpedImage.shape[0]
-    W = np.arange(0, PixelWidth) - round(PixelWidth / 2)
-    W = W / PixelWidth * Width
-    # define the path of the background images here:
-    BckgndImage, BackgroundNoise = backgroundImages(BackgroundPath, J, pts)
-    scipy.io.savemat(os.path.join(SavePath, 'CalibrationParamters.mat'), {'Jacobian': J, 'Length': L, 'Width': W,
-                                                                          'pts': pts, 'BckgndImage': BckgndImage,
-                                                                          'CutOff': CutOff,
-                                                                          'BackgroundNoise': BackgroundNoise})
-    return WarpedImage, J, L, W, BckgndImage, CutOff
-
-
-def backgroundImages(Path, J, pts):
-    if len(Path) > 0:
-        FileList = TupelOfFiles(Path)
-        BackgroundImages = ImportImageFiles(FileList)
-        BackgroundImage = np.mean(BackgroundImages, axis=2)
-        BackgroundNoise = np.std(BackgroundImages, axis=2)
-        WarpedBackgroundImage, ___ = four_point_transform(BackgroundImage, pts, J)
-        BackgroundNoise, ___ = four_point_transform(BackgroundNoise, pts, J)
-        WarpedBackgroundImage = np.fliplr(WarpedBackgroundImage)
-        BackgroundNoise = np.flip(BackgroundNoise)
-    else:
-        WarpedBackgroundImage = 0
-        BackgroundNoise = 0
-    return WarpedBackgroundImage, BackgroundNoise
-
-
 def determineHighEnergyCutOff(E, Spectrum, BckStd_SigmaLevel):
     """
     The Background is subtracted from the spectrum thus the noise level equals zero. 
@@ -655,3 +589,68 @@ def returnTotalEnergy(RunName):
     pipeline_TotalEnergy = mirage_analysis.DataPipeline('HighESpec', map_function_TotalEnergy,
                                                         map_function_AverageCutOff)
     return pipeline_TotalEnergy.run(RunName)
+
+
+'''
+def getCalibrationParameter(CalibrationFilePath):
+    """
+    The calibration files in the folder defined by "CalibrationFilePath" can be loaded with this function.
+    The output is a tupel, containing all important parameter:
+    J               Jacobian matrix for the correct normalisation of the warping of the espec image
+    W               Width of the camera image in mm
+    pts             The four points, which are used to warp the image and make it flat
+    E               Energy information of the length of the lanex screen
+    dxoverdE        For later to change the units of the lanex screen between mm to MeV
+    BckgndImage     Taken previous to subtract from the image
+    L               Length of the lanex. This is the energy dependend axis. In mm.
+    CutOff          Beginning of the lanex screen has imaging artifacts and doesn't contain real data. Its simply cut.
+    BackgroundNoise Std of the background images (to put the noise level of the image into statistic relevant context.
+    """
+    ImageWarpingFile = 'CalibrationParamters.mat'
+    ImageWarpingVariable = ['Jacobian', 'Length', 'Width', 'pts', 'BckgndImage', 'CutOff', 'BackgroundNoise']
+    CompleteSetVar = loadMatFile(CalibrationFilePath, ImageWarpingFile, ImageWarpingVariable)
+    J, L, W, pts, BckgndImage, CutOff, BackgroundNoise = CompleteSetVar
+    ImageWarpingFile = 'PositionVsEnergy.mat'
+    ImageWarpingVariable = ['Screen', 'EnergyOnAverage']
+    ScreenEnergyOnAverage = loadMatFile(CalibrationFilePath, ImageWarpingFile, ImageWarpingVariable)
+    Screen, EnergyOnAverage = ScreenEnergyOnAverage
+    Screen = Screen * 1e3  # in mm
+    poly3 = np.poly1d(np.polyfit(Screen[0, :], EnergyOnAverage[0, :], 3))
+    E = poly3(L)
+    dpoly3 = np.polyder(poly3)
+    dEoverdx = dpoly3(L)
+    dxoverdE = 1 / dEoverdx
+    return J, W, pts, E, dxoverdE, BckgndImage, L, CutOff, BackgroundNoise
+
+
+def getCalibrationParameter(CalibrationIndicator):
+    """
+    The calibration indicator contains of a letter, describing if the images referring to this date is a cropped image
+    and a date, which represent a specific background image.
+    The output is a tupel, containing all important parameter:
+    J               Jacobian matrix for the correct normalisation of the warping of the espec image
+    W               Width of the camera image in mm
+    pts             The four points, which are used to warp the image and make it flat
+    E               Energy information of the length of the lanex screen
+    dxoverdE        For later to change the units of the lanex screen between mm to MeV
+    BckgndImage     Taken previous to subtract from the image
+    L               Length of the lanex. This is the energy dependend axis. In mm.
+    CutOff          Beginning of the lanex screen has imaging artifacts and doesn't contain real data. Its simply cut.
+    BackgroundNoise Std of the background images (to put the noise level of the image into statistic relevant context.
+    """
+    ImageWarpingFile = 'CalibrationParamters.mat'
+    ImageWarpingVariable = ['Jacobian', 'Length', 'Width', 'pts', 'BckgndImage', 'CutOff', 'BackgroundNoise']
+    CompleteSetVar = loadMatFile(CalibrationFilePath, ImageWarpingFile, ImageWarpingVariable)
+    J, L, W, pts, BckgndImage, CutOff, BackgroundNoise = CompleteSetVar
+    ImageWarpingFile = 'PositionVsEnergy.mat'
+    ImageWarpingVariable = ['Screen', 'EnergyOnAverage']
+    ScreenEnergyOnAverage = loadMatFile(CalibrationFilePath, ImageWarpingFile, ImageWarpingVariable)
+    Screen, EnergyOnAverage = ScreenEnergyOnAverage
+    Screen = Screen * 1e3  # in mm
+    poly3 = np.poly1d(np.polyfit(Screen[0, :], EnergyOnAverage[0, :], 3))
+    E = poly3(L)
+    dpoly3 = np.polyder(poly3)
+    dEoverdx = dpoly3(L)
+    dxoverdE = 1 / dEoverdx
+    return J, W, pts, E, dxoverdE, BckgndImage, L, CutOff, BackgroundNoise
+'''
