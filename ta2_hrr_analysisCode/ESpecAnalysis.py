@@ -187,7 +187,7 @@ def changeFileEntry(NewEntry, runName, calPath=r'Y:\\ProcessedCalibrations'):
     print('Change %s of diagnostic %s to: %s. Previously it was %s' % (runName, diagnostic, NewEntry, oldEntry))
 
 
-def createNewCalibrationFiles2(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedCalibrations', BackgroundImage=0,
+def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedCalibrations', BackgroundImage=0,
                               BackgroundNoise=0):
     runPath = os.path.join(basePath, 'MIRAGE', 'HighESpec', runName)
     imageFolderPath = simpleFolderFinder(runPath)
@@ -219,8 +219,8 @@ def createNewCalibrationFiles2(runName, basePath=r'Z:\\', calPath='Y:\\Processed
     runDate = convertRunNameToDate(runName)
     backgroundPath = os.path.join(basePath, 'MIRAGE', 'HighESpec', '%d' % runDate, 'darkfield01')
     if not os.path.exists(backgroundPath):
-        print('WARNING E1: No darkfields were found. The calibration database will be updated, but the background image '
-              'is missing.')
+        print('WARNING E1: No darkfields were found. The calibration database will be updated, but the background '
+              'image is missing.')
     else:
         backgroundImagesPath = simpleFolderFinder(backgroundPath)
         FileList = TupelOfFiles(backgroundImagesPath)
@@ -229,16 +229,16 @@ def createNewCalibrationFiles2(runName, basePath=r'Z:\\', calPath='Y:\\Processed
             backgroundPath = os.path.join(basePath, 'MIRAGE', 'HighESpec', '%d' % runDate, 'darkfield02')
             if not os.path.exists(backgroundPath):
                 print(
-                    'WARNING E2: No darkfields with the right image dimensions were found. The calibration database will '
-                    'be updated, but the background image is missing.')
+                    'WARNING E2: No darkfields with the right image dimensions were found. The calibration database '
+                    'will be updated, but the background image is missing.')
             else:
                 backgroundImagesPath = simpleFolderFinder(backgroundPath)
                 FileList = TupelOfFiles(backgroundImagesPath)
                 testBackground = ImportImageFiles([FileList[0]])
                 if testImage.shape[0] != testBackground.shape[0]:
                     print(
-                        'WARNING E3: No darkfields with the right image dimensions were found. The calibration database '
-                        'will be updated, but the background image is missing.')
+                        'WARNING E3: No darkfields with the right image dimensions were found. The calibration '
+                        'database will be updated, but the background image is missing.')
                 else:
                     foundDarkfields = 1
         else:
