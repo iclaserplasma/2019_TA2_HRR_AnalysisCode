@@ -10,10 +10,42 @@ import os
 import scipy.io
 import numpy as np
 import cv2
+import csv
 
 '''
 Start the new code here ->
 '''
+
+
+def simpleFolderFinder(runPath):
+    #  This function finds the first folder containing images (becuase, some are single shot and some are bursts)
+    Filetype = ('.tif', '.tiff', '.TIFF', '.TIF')
+    filesInPath = os.listdir(runPath)
+    flag = 0
+    subdirectoryForLater = 0
+    for files in filesInPath:
+        if os.path.isdir(os.path.join(runPath, files)) and subdirectoryForLater == 0:
+            subdirectoryForLater = files
+        for endings in Filetype:
+            if files.endswith(endings):
+                flag = 1
+    if flag == 0:
+        newPath = os.path.join(runPath, subdirectoryForLater)
+        runPath = simpleFolderFinder(newPath)
+    return runPath
+
+
+def TupelOfFiles(path="", Filetype=('.tif', '.tiff', '.TIFF', '.TIF')):
+    if not isinstance(Filetype, list):
+        Filetype = list(Filetype)
+    if len(path) == 0:
+        path = "."
+    FileList = []
+    for files in os.listdir(path):
+        for endings in Filetype:
+            if files.endswith(endings):
+                FileList.append(os.path.join(path, files))
+    return FileList
 
 
 def ImportImageFiles(FileList):
@@ -150,12 +182,13 @@ def imageTransformation(image, calibrationTupel):
     WarpedImageWithoutBckgnd = WarpedImage - BackgroundImage  # background subtraction
     return WarpedImageWithoutBckgnd
 
+
 def electronSpectrum(Image, dxoverdE, L):
-    '''
+    """
     The sum of the counts transversally will result in a unit of counts. Dividing this by the area of a pixel will result in MeV/mm in this case.
     We then change the variables into Counts/MeV by multiplying with dx/dE.
     Output is then Counts/MeV.
-    '''
+    """
     SumCounts = np.sum(Image, 0)
     Spectrum = np.multiply(SumCounts, dxoverdE) / np.mean(np.diff(L))
     return Spectrum
@@ -168,10 +201,84 @@ for this version of code (v0.1 20200106)
 '''
 
 
-def getCalibrationFileHardCoded(runName):
-    # this is from the experiment and not flexible. It might be better to change that in the future, but this might as
-    # well just be sufficient enough for this experiment. The only variable of this is potentially the background noise.
-    # However there is no physical evidence that this changed between the different days.
+# New approach:
+# There will be two functions here.
+# One will create a CalibrationParameters.mat with a unique name. This file will cover different possible configurations
+# It will look for settings and other things. It has to be part of a second function, which input will be a runName.
+# This second function is the main function:
+
+
+def changeFileEntry(NewEntry, runName, basePath=r'Z:\\'):
+    csvFile = os.path.join(basePath, 'Calibration', 'Cali.csv') # change to the correct name
+    TotalFile = csv.reader(open(csvFile))
+    entries = list(TotalFile)
+    diagnostic = 'HighESpec'
+    identifiedRun = 0
+    identifiedDiag = 0
+    for i in range(0, len(entries[0])):
+        if entries[0][i] == diagnostic:
+            identifiedDiag = i
+    for j in range(0, len(entries)):
+        if entries[j][0] == runName:
+            identifiedRun = j
+    if identifiedRun == 0 and identifiedDiag == 0:
+        raise ValueError('The runName (%s) and diagnostic (%s) was found!' % (runName, diagnostic))
+    oldEntry = entries[identifiedRun][identifiedDiag]
+    if oldEntry is none:
+        oldEntry = 'empty'
+    entries[identifiedRun][identifiedDiag] = NewEntry
+    writer = csv.writer(open(csvFile, 'w'))
+    writer.writerows(entries)
+    print('Change %s of diagnostic %s to: %s. Previously it was %s' % (runName, diagnostic, NewEntry, oldEntry))
+
+
+def createNewCalibrationFiles(runName, basePath=r'Z:\\'):
+    runPath = os.path.join(basePath, 'MIRAGE', 'HighESpec', runName)
+    imageFolderPath = simpleFolderFinder(runPath)
+    FileList = TupelOfFiles(imageFolderPath)
+    testImage = ImportImageFiles([FileList[0]])
+    if testImage.shape[0] < 1216:
+        SizeIndicator = 'S'
+        pts = np.array([[40, 659 - 328], [41, 380 - 328], [1905, 389 - 328],
+                        [1907, 637 - 328]])  # this was after we cropped the image (> 13. September)
+    else:
+        SizeIndicator = 'L'
+        pts = np.array(
+            [[40, 659], [41, 380], [1905, 389], [1907, 637]])  # this was before we cropped the image (< 11.September)
+    Length = 350 - 120
+    Width = 30
+    ScreenStart = 120
+    CutOff = 300
+    #  distinguish between two cases:
+    #  1) the S and L CalibrationParameter
+    WarpedImage, M = four_point_transform(testImage[:, :, 0], pts)
+    WarpedImage = np.fliplr(WarpedImage)
+    J, L = getJacobianAndSpatialCalibration(ImageWithSpatialPattern[:, :, 0].shape, WarpedImage.shape, M, Length,
+                                            ScreenStart)
+    PixelWidth = WarpedImage.shape[0]
+    W = np.arange(0, PixelWidth) - round(PixelWidth / 2)
+    W = W / PixelWidth * Width
+
+    SavePath = os.path.join(basePath, 'Calibrations', 'HighESpec')
+    CalibrationFilePath = os.path.join(SavePath, 'CalibrationParamters', '%s.mat' % SizeIndicator)
+    if not os.path.exists(CalibrationFilePath):
+        scipy.io.savemat(CalibrationFilePath, {'Jacobian': J, 'Length': L, 'Width': W, 'pts': pts, 'CutOff': CutOff})
+
+    #  2) The background image should be done per day. Save the background image with its date.
+    #  In the future, the two cases below might require additional coding:
+    #  2.1) Even per day it could occur that the saved format is wrong. -> Check if size is correct, if not, try another
+    #  2.2) Save the background image with its appending number and scan through if necessary
+
+    # Case 2)
+    BckgndImage, BackgroundNoise = backgroundImages(BackgroundPath, J, pts)
+    runDate = convertRunNameToDate(runName)
+    BackgroundSavePath = os.path.join(SavePath, 'Darkfields', '%sBackground.mat' % runDate)
+    scipy.io.savemat(BackgroundSavePath, {'BckgndImage': BckgndImage, 'BackgroundNoise': BackgroundNoise})
+    entryForCalibrationDatabase = '%s%d' % (SizeIndicator, runDate)
+    return entryForCalibrationDatabase
+
+
+def convertRunNameToDate(runName):
     if isinstance(runName, str):
         if "\\" in r"%r" % runName:
             # This has to be done, because a backslash is a special character and cannot be identified
@@ -189,13 +296,21 @@ def getCalibrationFileHardCoded(runName):
             runNameAccumulate += runName[walkThrough]
             walkThrough += 1
         runName = float(runNameAccumulate)
+    return runName
+
+
+def getCalibrationFileHardCoded(runName):
+    # this is from the experiment and not flexible. It might be better to change that in the future, but this might as
+    # well just be sufficient enough for this experiment. The only variable of this is potentially the background noise.
+    # However there is no physical evidence that this changed between the different days.
+    runName = convertRunNameToDate(runName)
     if 20190719 <= runName:
         CalibrationFile = 'July2019'
     if 20190801 <= runName:
         CalibrationFile = 'August2019'
     if 20190901 <= runName:
         CalibrationFile = 'September2019'
-    if 20191001 <= runName:
+    if 20190911 <= runName:
         CalibrationFile = 'October2019'
     CalibrationFilePath = os.path.join(*['Calibrations', 'HighESpec', CalibrationFile])
     return CalibrationFilePath
