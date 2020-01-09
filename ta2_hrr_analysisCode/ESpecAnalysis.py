@@ -179,12 +179,13 @@ def changeFileEntry(NewEntry, runName, calPath=r'Y:\\ProcessedCalibrations'):
     if identifiedRun == 0 and identifiedDiag == 0:
         raise ValueError('The runName (%s) and diagnostic (%s) was found!' % (runName, diagnostic))
     oldEntry = entries[identifiedRun][identifiedDiag]
-    if oldEntry is none:
+    if oldEntry == '':
         oldEntry = 'empty'
     entries[identifiedRun][identifiedDiag] = NewEntry
-    writer = csv.writer(open(csvFile, 'w'))
+    writer = csv.writer(open(csvFile, 'w', newline=''))
     writer.writerows(entries)
-    print('Change %s of diagnostic %s to: %s. Previously it was %s' % (runName, diagnostic, NewEntry, oldEntry))
+    print('Changed run: %s of diagnostic %s to: \'%s\'. Previously it was \'%s\'.' % (runName, diagnostic, NewEntry, oldEntry))
+    return entries
 
 
 def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedCalibrations', BackgroundImage=0,
