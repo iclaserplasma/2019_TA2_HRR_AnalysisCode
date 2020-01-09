@@ -80,8 +80,10 @@ def extractWavefrontInfo(dataFile,verbose=False):
 		# And finally finally finally, we must delete the temporary files
 		# that were created by splitHASOFiles
 		os.remove('Wavefront.xml')
-		os.remove('Pupil.xml')
-
+		try:
+			os.remove('Pupil.xml')
+		except:
+			print('No Pupil.xml File Found to Delete')
 	xSlopes = xSlopes/numFiles
 	ySlopes = ySlopes/numFiles
 	intensity = intensity/numFiles

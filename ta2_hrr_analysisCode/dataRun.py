@@ -4,7 +4,7 @@ import numpy as np
 from scipy.signal import medfilt
 from sqlDatabase import connectToSQL
 import logging
-
+import csv 
 
 
 # IMPORT DIAGNOSTIC CODES
@@ -295,7 +295,7 @@ class dataRun:
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
 		
 		if useChamberCalibration:
-			zernikeOffsets = loadCalibrationData(diag)
+			zernikeOffsets = self.loadCalibrationData(diag)
 		
 		for burstStr in filePathDict.keys():		
 			if useChamberCalibration:
@@ -508,7 +508,9 @@ class dataRun:
 		dateRunString = runDate + '\\' + runName
 
 		# Now open the csv file and find the row in which the first column entry matches the dateRunString
-		calibrationPath = self.calibrationPath
+		calibrationFolder = self.calibrationFolder
+		calibrationPath = os.path.join(calibrationFolder,'CalibrationPaths.csv')
+		csv_file = csv.reader(open(calibrationPath, "r"), delimiter=",")
 
 		cntr = 0
 		for row in csv_file:
@@ -532,6 +534,9 @@ class dataRun:
 		try:
 			calibData = np.load(calibrationFilePath)
 		except:
+			print('Info Recieved')
+			print(calibrationFolder)
+			print(calibrationPath)
 			raise Exception('COULD NOT LOAD CALIBRATION FILE, PLEASE CHECK IT EXISTS AND THE PATH IN calibrationPaths.csv IS CORRECT')
 
 
