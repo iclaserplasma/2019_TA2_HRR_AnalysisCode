@@ -289,21 +289,27 @@ class dataRun:
 		return 0
 
 	# HASO Analysis
-	def performHASOAnalysis(self,calibrationPath=None):
+	def performHASOAnalysis(self,useChamberCalibration=True):
 		diag = 'HASO'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
+		
+		if useChamberCalibration:
+			zernikeOffsets = loadCalibrationData(diag)
+		
 		for burstStr in filePathDict.keys():		
-			if calibrationPath is None:
+			if useChamberCalibration:
+				analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(filePathDict[burstStr],zernikeOffsets)
+				# Save the data
+				analysisSavePath = os.path.join(analysisPath,burstStr,'calibratedWavefront')
+				self.saveData(analysisSavePath,analysedData)
+
+			else:
 				analysedData = HASOAnalysis.extractWavefrontInfo(filePathDict[burstStr])
 				# Save the data
 				analysisSavePath = os.path.join(analysisPath,burstStr,'waveFrontOnLeakage')
 				self.saveData(analysisSavePath,analysedData)
-			else:
-				analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(filePathDict[burstStr],calibrationPath)
-				# Save the data
-				analysisSavePath = os.path.join(analysisPath,burstStr,'calibratedWavefront')
-				self.saveData(analysisSavePath,analysedData)
+			
 			print('Analysed HASO '+ burstStr)
 
 

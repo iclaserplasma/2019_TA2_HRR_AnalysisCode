@@ -102,17 +102,16 @@ def extractWavefrontInfo(dataFile,verbose=False):
 	
 	return (X,Y,phase,intensity,pupil,pupilCoords,zernikeCoeffs)
 
-def extractCalibratedWavefrontInfo(dataFile,calibrationFile,verbose=False):
+def extractCalibratedWavefrontInfo(dataFile,zernikeOffsets,verbose=False):
 	# Given a data File and a calibration File, this function spits out a list of
 	# Zernike polynomials which can be used to correctly identify the wavefront
 	# at the interaction point from measurements on the leakage diagnostic table.
 
-	# The calibration file simply consists of a set of zernikes to be added to	
-	# main zernike list
+	# The zernikeOffsets are simply the difference in zernike polynomial between the chamber
+	# and the leakage table.
 
 	# First extract the wavefront
 	(X,Y,phase,intensity,pupil,pupilCoords,zernikeCoeffs) = extractWavefrontInfo(dataFile,verbose=verbose)
-	zernikeOffsets = np.load(calibrationFile)
 
 	zernikes = zernikeCoeffs + zernikeOffsets
 
