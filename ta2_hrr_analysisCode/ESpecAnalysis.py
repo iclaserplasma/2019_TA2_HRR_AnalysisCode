@@ -208,7 +208,7 @@ def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='C:\\Users\\las
     #  1) the S and L CalibrationParameter
     WarpedImage, M = four_point_transform(testImage[:, :, 0], pts)
     WarpedImage = np.fliplr(WarpedImage)
-    J, L = getJacobianAndSpatialCalibration(ImageWithSpatialPattern[:, :, 0].shape, WarpedImage.shape, M, Length,
+    J, L = getJacobianAndSpatialCalibration(testImage[:, :, 0].shape, WarpedImage.shape, M, Length,
                                             ScreenStart)
     PixelWidth = WarpedImage.shape[0]
     W = np.arange(0, PixelWidth) - round(PixelWidth / 2)
