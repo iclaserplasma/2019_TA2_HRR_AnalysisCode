@@ -177,7 +177,7 @@ def findCalibrationEntry(runName, calPath):
         if entries[j][0] == runName:
             identifiedRun = j
     if identifiedRun == 0 and identifiedDiag == 0:
-        raise ValueError('The runName (%s) and diagnostic (%s) was found!' % (runName, diagnostic))
+        raise ValueError('The runName (%s) and diagnostic (%s) was found!' % (runName, 'HighESpec'))
     return entries, identifiedRun, identifiedDiag
 
 
@@ -190,7 +190,7 @@ def changeFileEntry(NewEntry, runName, calPath=r'Y:\\ProcessedCalibrations'):
     csvFile = os.path.join(calPath, 'CalibrationPaths.csv')  # change to the correct name
     writer = csv.writer(open(csvFile, 'w', newline=''))
     writer.writerows(entries)
-    print('Changed run: %s of diagnostic %s to: \'%s\'. Previously it was \'%s\'.' % (runName, diagnostic, NewEntry, oldEntry))
+    print('Changed run: %s of diagnostic %s to: \'%s\'. Previously it was \'%s\'.' % (runName, 'HighESpec', NewEntry, oldEntry))
     return entries
 
 
