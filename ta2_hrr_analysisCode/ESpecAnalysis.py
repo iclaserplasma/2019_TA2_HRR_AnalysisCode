@@ -11,6 +11,7 @@ import scipy.io
 import numpy as np
 import cv2
 import csv
+import re
 
 '''
 Start the new code here ->
@@ -48,7 +49,7 @@ def TupelOfFiles(path="", Filetype=('.tif', '.tiff', '.TIFF', '.TIF')):
         for endings in Filetype:
             if files.endswith(endings):
                 FileList.append(os.path.join(path, files))
-    return FileList
+    return FileList.sort(key=lambda entries: int(re.findall(r'\d+', entries)[0]))
 
 
 def ImportImageFiles(FileList):
@@ -190,7 +191,8 @@ def changeFileEntry(NewEntry, runName, calPath=r'Y:\\ProcessedCalibrations'):
     csvFile = os.path.join(calPath, 'CalibrationPaths.csv')  # change to the correct name
     writer = csv.writer(open(csvFile, 'w', newline=''))
     writer.writerows(entries)
-    print('Changed run: %s of diagnostic %s to: \'%s\'. Previously it was \'%s\'.' % (runName, 'HighESpec', NewEntry, oldEntry))
+    print('Changed run: %s of diagnostic %s to: \'%s\'. Previously it was \'%s\'.' % (
+    runName, 'HighESpec', NewEntry, oldEntry))
     return entries
 
 
