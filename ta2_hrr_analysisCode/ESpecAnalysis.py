@@ -163,7 +163,7 @@ for this version of code (v0.1 20200106)
 # This second function is the main function:
 
 
-def changeFileEntry(NewEntry, runName, calPath=r'Y:\\ProcessedCalibrations'):
+def findCalibrationEntry(runName, calPath):
     csvFile = os.path.join(calPath, 'CalibrationPaths.csv')  # change to the correct name
     TotalFile = csv.reader(open(csvFile))
     entries = list(TotalFile)
@@ -178,6 +178,11 @@ def changeFileEntry(NewEntry, runName, calPath=r'Y:\\ProcessedCalibrations'):
             identifiedRun = j
     if identifiedRun == 0 and identifiedDiag == 0:
         raise ValueError('The runName (%s) and diagnostic (%s) was found!' % (runName, diagnostic))
+    return entries, identifiedRun, identifiedDiag
+
+
+def changeFileEntry(NewEntry, runName, calPath=r'Y:\\ProcessedCalibrations'):
+    entries, identifiedRun, identifiedDiag = findCalibrationEntry(runName, calPath)
     oldEntry = entries[identifiedRun][identifiedDiag]
     if oldEntry == '':
         oldEntry = 'empty'
