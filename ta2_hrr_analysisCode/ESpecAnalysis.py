@@ -187,6 +187,7 @@ def changeFileEntry(NewEntry, runName, calPath=r'Y:\\ProcessedCalibrations'):
     if oldEntry == '':
         oldEntry = 'empty'
     entries[identifiedRun][identifiedDiag] = NewEntry
+    csvFile = os.path.join(calPath, 'CalibrationPaths.csv')  # change to the correct name
     writer = csv.writer(open(csvFile, 'w', newline=''))
     writer.writerows(entries)
     print('Changed run: %s of diagnostic %s to: \'%s\'. Previously it was \'%s\'.' % (runName, diagnostic, NewEntry, oldEntry))
