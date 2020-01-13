@@ -127,9 +127,13 @@ class xrayDeJiggler:
         y_rot=[]
         imgComb=[]
         imgRef = None
+        buildRef = True
         if use_existing_ref:
             if self.imgRef is not None:
                 imgRef = self.imgRef
+                buildRef = False
+                
+        
             
 
         imgMeanThresh = 200
@@ -157,6 +161,10 @@ class xrayDeJiggler:
                 x_rot.append(int(x_opt[0]))
                 y_rot.append(int(x_opt[1]))
                 imgComb.append(shiftImage(img,x_opt))
+            
+            if buildRef:
+                imgRef = np.median(imgComb,axis=0)
+                self.imgRef = imgRef
         sys.stdout.flush()
         print('\r','Done')   
         

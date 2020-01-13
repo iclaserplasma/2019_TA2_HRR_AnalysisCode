@@ -4,6 +4,8 @@ import numpy as np
 from scipy.signal import medfilt
 from sqlDatabase import connectToSQL
 import logging
+import csv 
+
 
 # IMPORT DIAGNOSTIC CODES
 import SPIDERAnalysis
@@ -76,7 +78,7 @@ class dataRun:
 	# -------------------------------------------------------------------------------------------------------------------
 
 
-	def __init__(self, baseDataFolder, baseAnalysisFolder, runDate, runName,refRunDate,refRunName,verbose=0):
+	def __init__(self, baseDataFolder, baseAnalysisFolder, calibrationFolder, runDate, runName,refRunDate,refRunName,verbose=0):
 		# baseDataFolder is the location of the Mirage Data folder
 		# runDate is a string
 		# runName is a string
@@ -86,7 +88,8 @@ class dataRun:
 
 		self.baseDataFolder 	= baseDataFolder
 		self.baseAnalysisFolder	= baseAnalysisFolder
-		
+		self.calibrationFolder  = calibrationFolder
+
 		# Data Information
 		self.runDate 			= runDate
 		self.runName 			= runName
@@ -286,21 +289,27 @@ class dataRun:
 		return 0
 
 	# HASO Analysis
-	def performHASOAnalysis(self,calibrationPath=None):
+	def performHASOAnalysis(self,useChamberCalibration=True):
 		diag = 'HASO'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
+		
+		if useChamberCalibration:
+			zernikeOffsets = self.loadCalibrationData(diag)
+		
 		for burstStr in filePathDict.keys():		
-			if calibrationPath is None:
+			if useChamberCalibration:
+				analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(filePathDict[burstStr],zernikeOffsets)
+				# Save the data
+				analysisSavePath = os.path.join(analysisPath,burstStr,'calibratedWavefront')
+				self.saveData(analysisSavePath,analysedData)
+
+			else:
 				analysedData = HASOAnalysis.extractWavefrontInfo(filePathDict[burstStr])
 				# Save the data
 				analysisSavePath = os.path.join(analysisPath,burstStr,'waveFrontOnLeakage')
 				self.saveData(analysisSavePath,analysedData)
-			else:
-				analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(filePathDict[burstStr],calibrationPath)
-				# Save the data
-				analysisSavePath = os.path.join(analysisPath,burstStr,'calibratedWavefront')
-				self.saveData(analysisSavePath,analysedData)
+			
 			print('Analysed HASO '+ burstStr)
 
 
@@ -482,10 +491,57 @@ class dataRun:
 		baseAnalysisFolder = self.baseAnalysisFolder
 		runDate = self.runDate
 		runName = self.runName
-		np.save(os.path.join(baseAnalysisFolder,runDate,runName,'runObject'), self)
+		np.save(os.path.join(baseAnalysisFolder,'General',runDate,runName,'runObject'), self)
 
 	
-	
+	def loadCalibrationData(self, diag):
+		''' Find the calibration data for a particular diagnostic
+		This function will open the calibration look up csv file and find
+		the relevant folder containing the calibrations for the chosen data run
+		It will then load the data and spit it out as a return
+		'''
+
+		# Get data run and construct date/run string
+		runDate = self.runDate
+		runName = self.runName
+
+		dateRunString = runDate + '\\' + runName
+
+		# Now open the csv file and find the row in which the first column entry matches the dateRunString
+		calibrationFolder = self.calibrationFolder
+		calibrationPath = os.path.join(calibrationFolder,'CalibrationPaths.csv')
+		csv_file = csv.reader(open(calibrationPath, "r"), delimiter=",")
+
+		cntr = 0
+		for row in csv_file:
+			if cntr == 0:
+				# This row contains the list of diagnostics
+				diagList = row
+			cntr = 1
+			dateRunStringTest = row[0]
+			if dateRunStringTest == dateRunString:
+				break
+
+		cntr = 0
+		for tmpDiag in diagList:
+			if diag == tmpDiag:
+				break
+			cntr = cntr + 1
+			
+		calibrationFilePath = row[cntr]
+
+		# Now Load in the data 
+		try:
+			calibData = np.load(calibrationFilePath)
+		except:
+			print('Info Recieved')
+			print(calibrationFolder)
+			print(calibrationPath)
+			raise Exception('COULD NOT LOAD CALIBRATION FILE, PLEASE CHECK IT EXISTS AND THE PATH IN calibrationPaths.csv IS CORRECT')
+
+
+		return calibData
+
 
 
 
