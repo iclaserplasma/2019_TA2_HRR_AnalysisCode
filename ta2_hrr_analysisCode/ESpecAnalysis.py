@@ -103,16 +103,25 @@ def extractCharge(FileList, CalibrationFilePath):
 
 
 def analyseImage(rawImage, calibrationTupel):
+    """
+    This function is the main analysis function. It takes an image together with the calibration parameter to calculate
+    various information from the high energy electrons spectrometer.
+    :param rawImage: image matrix as doubles.
+    :param calibrationTupel: (J, W, pts, E, dxoverdE, BackgroundImage, L, CutOff, BackgroundNoise) as a tupel
+    Explicit information about the calibrationTupel see function 'createNewCalibrationFiles'
+    :return:
+    
+    """
     J, W, pts, E, dxoverdE, BackgroundImage, L, CutOff, BackgroundNoise = calibrationTupel
     # preparation of the calibration parameter (later move into the calibration prep above)
     # The cut off is an index, which indicates, where the calibration between image plate and camera image did not work.
     # This was due to a camera artifact (an imaging problem with the perplex glass)
-    #    Energy = E.T[self.CutOff:, :]
+    Energy = E.T[self.CutOff:, :]
     # the following parameters will be cut only if they are intended to be used.
     #    Length = L[:, self.CutOff:]
     #    dxoverdE = dxoverdE[:, self.CutOff:]  # MIGHT BE WRONG
     #    BackgroundImage = BckgndImage[:, self.CutOff:]
-    #    BackgroundNoise = BackgroundNoise[:, self.CutOff:]
+    BackgroundNoise = BackgroundNoise[:, self.CutOff:]
 
     # here hard coded: the analysis of the image plates yield to a count to fC calibration of:
     fCperCounts = 2.7e-3
@@ -127,7 +136,10 @@ def analyseImage(rawImage, calibrationTupel):
     Charge = ChargeInCounts * fCperCounts  # Charge in fC
     Spectrum = Spectrum[:, CutOff:]  # cutting off the low energy bit as described above
     Spectrum = Spectrum * fCperCounts  # changing the units from counts/MeV -> fC/MeV
-    return Spectrum, Charge
+    BackgroundStd_SigmaLevel = np.sum(BackgroundNoise, axis=0) * SignificanceLevel
+    cutoffEnergy95 = determine95percentCharge(Energy, Spectrum, BackgroundStd_SigmaLevel)
+    totalEnergy = determineTotalEnergy(Energy, Spectrum, BackgroundStd_SigmaLevel)
+    return Spectrum, Charge, totalEnergy, cutoffEnergy95
 
 
 def imageTransformation(image, calibrationTupel):
@@ -150,18 +162,55 @@ def electronSpectrum(Image, dxoverdE, L):
     return Spectrum
 
 
+def determine95percentCharge(E, Spectrum, BckStd_SigmaLevel):
+    """
+    The Background is subtracted from the spectrum thus the noise level equals zero.
+    However the std of the noise should be determined and then a sigma level of that should be set know where to ognore the charge.
+    Then the cummulative trapz integral is calculated to determine where the cut off is by looking where 95% of the charge is.
+    To test this and plot this use:
+
+    plt.plot(E, np.append(np.array([True]),np.array([CumTrapzMinus1 < 0.95])))
+    plt.plot(E[:-1], CumTrapzMinus1)
+    plt.plot(E, TmpSpectrum/np.max(TmpSpectrum))
+    plt.legend(('Within 95 %','Cummulative Integration','Spectrum'))
+    plt.xlabel('Energy [MeV]')
+
+    Note: BckStd_SigmaLevel has the dimension (num,) which means that Spectrum, having the dimension (num,1) needs to be taken
+    """
+    TmpSpectrum = np.zeros(Spectrum.shape)
+    Mask = np.greater(Spectrum[:, 0], BckStd_SigmaLevel)
+    if any(Mask) is True:
+        TmpSpectrum[Mask, 0] = Spectrum[Mask, 0]
+        TmpSpectrum = TmpSpectrum / np.trapz(TmpSpectrum.T, E.T)
+        CumTrapzMinus1IndexPrep = (TmpSpectrum[:-1, 0] + TmpSpectrum[1:, 0]) / 2 * np.diff(E, axis=0)[:, 0]
+        CumTrapzMinus1 = np.cumsum(CumTrapzMinus1IndexPrep)
+        MaskCumSum = np.append(np.array([True]), np.array([CumTrapzMinus1 < 0.95]))
+        MaximumEnergy = np.amax(E[MaskCumSum, :])
+    else:
+        MaximumEnergy = 0
+    return MaximumEnergy
+
+
+def determineTotalEnergy(E, Spectrum, BckStd_SigmaLevel):
+    """
+    The Background is subtracted from the spectrum thus the noise level equals zero.
+    However the std of the noise should be determined and then a sigma level of that should be set to estimate the high
+    energy cut off.
+    Note: BckStd_SigmaLevel has the dimension (num,) which means that Spectrum, having the dimension (num,1) needs to be taken
+    """
+    Mask = np.greater(Spectrum[:, 0], BckStd_SigmaLevel)
+    if any(Mask) is True:
+        TotalEnergy = np.trapz(np.multiply(np.multiply(E[:, 0], Mask), Spectrum[:, 0]), E[:, 0])
+    else:
+        TotalEnergy = 0
+    return TotalEnergy
+
+
 '''
 Below will be the code for creating the calibration file(s).
 For now though, the calibration files have been created during the experiment and it seems that they are reasonable good
 for this version of code (v0.1 20200106)  
 '''
-
-
-# New approach:
-# There will be two functions here.
-# One will create a CalibrationParameters.mat with a unique name. This file will cover different possible configurations
-# It will look for settings and other things. It has to be part of a second function, which input will be a runName.
-# This second function is the main function:
 
 
 def findCalibrationEntry(runName, calPath):
@@ -198,6 +247,27 @@ def changeFileEntry(NewEntry, runName, calPath=r'Y:\\ProcessedCalibrations'):
 
 def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedCalibrations', BackgroundImage=0,
                               BackgroundNoise=0):
+    """
+    This function creates a calibration file for a specific run.
+    :param runName: run name, which this calibration file will be for. Format: YYYYMMDD/run000
+    :param basePath: The folder in which the folders 'MIRAGE' and 'Calibrations' can be found
+    :param calPath: The folder in which the 'CalibrationPaths.csv' data base can be found.
+    :param BackgroundImage: Certain days do not have any darkfields. If desired, one can load the background image from
+    a previous day and have it as input of this function to change that.
+    :param BackgroundNoise: see previous param
+    Explanation of the calibration tupel:
+    J is the Jacobian to compensate for warping the image flat.
+    W is the width of the lanex screen (this is the divergence)
+    pts are the points in the camera image, which are taken as edge points to flatten the camera image.
+    E is the energy information along the lanex screen (length of the lanex is the energy axis)
+    dxoverdE is to convert the lanex axis from mm into MeV
+    BackgroundImage is the darkfield of the day the run was taken on. Its the average of 100 shots.
+    L is the longitudinal information of the lanex screen. This is the energy axis, here in mm.
+    CutOff contains an index of the longitudinal axis. The images obtained had artifacts of imaging the lanex screen and
+    do not contain real information. Its most-likely from the perspex window.
+    BackgroundNoise is the standard deviation from the 100 shots taken for the darkfields (see BackgroundImage)
+    :return: saves the calibration tupel and changes the intry in the calibration database entry.
+    """
     runPath = os.path.join(basePath, 'MIRAGE', 'HighESpec', runName)
     imageFolderPath = simpleFolderFinder(runPath)
     FileList = TupelOfFiles(imageFolderPath)
@@ -224,6 +294,8 @@ def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedC
     #  Darkfields:
     #  The first section is to find the darkfields of the specific day. It might be that there were two sets of that day
     #  since the image size might have varied during the day.
+    if BackgroundImage != 0:
+        foundDarkfields = 1
     foundDarkfields = 0
     runDate = convertRunNameToDate(runName)
     backgroundPath = os.path.join(basePath, 'MIRAGE', 'HighESpec', '%d' % runDate, 'darkfield01')
@@ -253,22 +325,26 @@ def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedC
         else:
             foundDarkfields = 1
     if foundDarkfields:
-        BackgroundImage, BackgroundNoise = backgroundImages(backgroundImagesPath, J, pts)
-    #  now loading the right magnet map
-    FileLocation = os.path.join(basePath, 'Calibrations', 'HighESpec')
-    E, dxoverdE = getEnergyTransformation(FileLocation, L)
+        if BackgroundImage != 0:
+            BackgroundImage, BackgroundNoise = backgroundImages(backgroundImagesPath, J, pts)
+        #  now loading the right magnet map
+        FileLocation = os.path.join(basePath, 'Calibrations', 'HighESpec')
+        E, dxoverdE = getEnergyTransformation(FileLocation, L)
 
-    totalCalibrationFilePath = os.path.join(calPath, 'HighEspec', '%d' % runDate)
-    if not os.path.exists(totalCalibrationFilePath):
-        os.mkdir(totalCalibrationFilePath)
-    simpleRunName = runName[9:]
-    calFile = os.path.join(totalCalibrationFilePath, simpleRunName)
-    calibrationTupel = (J, W, pts, E, dxoverdE, BackgroundImage, L, CutOff, BackgroundNoise)
-    np.save(calFile, calibrationTupel)
-    #  the entry for the database is a relative path:
-    relPathForDatabase = os.path.join('HighESpec', '%d' % runDate, '%s.npy' % simpleRunName)
-    changeFileEntry(relPathForDatabase, runName, calPath)
-    return relPathForDatabase
+        totalCalibrationFilePath = os.path.join(calPath, 'HighEspec', '%d' % runDate)
+        if not os.path.exists(totalCalibrationFilePath):
+            os.mkdir(totalCalibrationFilePath)
+        simpleRunName = runName[9:]
+        calFile = os.path.join(totalCalibrationFilePath, simpleRunName)
+        calibrationTupel = (J, W, pts, E, dxoverdE, BackgroundImage, L, CutOff, BackgroundNoise)
+        np.save(calFile, calibrationTupel)
+        #  the entry for the database is a relative path:
+        relPathForDatabase = os.path.join('HighESpec', '%d' % runDate, '%s.npy' % simpleRunName)
+        changeFileEntry(relPathForDatabase, runName, calPath)
+    else:
+        if os.path.exists(calFile):
+            os.remove(calFile)
+            changeFileEntry('', runName, calPath)
 
 
 def getEnergyTransformation(FileLocation, L):
@@ -471,35 +547,6 @@ def determineHighEnergyCutOff(E, Spectrum, BckStd_SigmaLevel):
     return MaximumEnergy
 
 
-def determine95percentCharge(E, Spectrum, BckStd_SigmaLevel):
-    """
-    The Background is subtracted from the spectrum thus the noise level equals zero. 
-    However the std of the noise should be determined and then a sigma level of that should be set know where to ognore the charge.
-    Then the cummulative trapz integral is calculated to determine where the cut off is by looking where 95% of the charge is.
-    To test this and plot this use:
-
-    plt.plot(E, np.append(np.array([True]),np.array([CumTrapzMinus1 < 0.95])))
-    plt.plot(E[:-1], CumTrapzMinus1)
-    plt.plot(E, TmpSpectrum/np.max(TmpSpectrum))
-    plt.legend(('Within 95 %','Cummulative Integration','Spectrum'))
-    plt.xlabel('Energy [MeV]')
-
-    Note: BckStd_SigmaLevel has the dimension (num,) which means that Spectrum, having the dimension (num,1) needs to be taken
-    """
-    TmpSpectrum = np.zeros(Spectrum.shape)
-    Mask = np.greater(Spectrum[:, 0], BckStd_SigmaLevel)
-    if any(Mask) is True:
-        TmpSpectrum[Mask, 0] = Spectrum[Mask, 0]
-        TmpSpectrum = TmpSpectrum / np.trapz(TmpSpectrum.T, E.T)
-        CumTrapzMinus1IndexPrep = (TmpSpectrum[:-1, 0] + TmpSpectrum[1:, 0]) / 2 * np.diff(E, axis=0)[:, 0]
-        CumTrapzMinus1 = np.cumsum(CumTrapzMinus1IndexPrep)
-        MaskCumSum = np.append(np.array([True]), np.array([CumTrapzMinus1 < 0.95]))
-        MaximumEnergy = np.amax(E[MaskCumSum, :])
-    else:
-        MaximumEnergy = 0
-    return MaximumEnergy
-
-
 def map_function_AverageCutOff(data):
     data = np.array(data)
     Mask = data > 0
@@ -534,21 +581,6 @@ def determineHighEnergyCutOff(E, Spectrum, BckStd_SigmaLevel):
     else:
         MaximumEnergy = 0
     return MaximumEnergy
-
-
-def determineTotalEnergy(E, Spectrum, BckStd_SigmaLevel):
-    """
-    The Background is subtracted from the spectrum thus the noise level equals zero. 
-    However the std of the noise should be determined and then a sigma level of that should be set to estimate the high
-    energy cut off.
-    Note: BckStd_SigmaLevel has the dimension (num,) which means that Spectrum, having the dimension (num,1) needs to be taken
-    """
-    Mask = np.greater(Spectrum[:, 0], BckStd_SigmaLevel)
-    if any(Mask) is True:
-        TotalEnergy = np.trapz(np.multiply(np.multiply(E[:, 0], Mask), Spectrum[:, 0]), E[:, 0])
-    else:
-        TotalEnergy = 0
-    return TotalEnergy
 
 
 def map_function_AverageCutOff(data):
