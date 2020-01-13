@@ -110,7 +110,7 @@ def analyseImage(rawImage, calibrationTupel):
     :param calibrationTupel: (J, W, pts, E, dxoverdE, BackgroundImage, L, CutOff, BackgroundNoise) as a tupel
     Explicit information about the calibrationTupel see function 'createNewCalibrationFiles'
     :return:
-    
+
     """
     J, W, pts, E, dxoverdE, BackgroundImage, L, CutOff, BackgroundNoise = calibrationTupel
     # preparation of the calibration parameter (later move into the calibration prep above)
