@@ -264,19 +264,10 @@ class dataRun:
 
 
 
-	# ELECTRON SPECTRUM ANALYSIS CALLS -- THIS IS CURRENTLY JUST AN EXAMPLE
-	def performESpecAnalysis(self,overwriteData=False):
-		# Check if analysed data already exists
-		# if it does and overWriteData == False, then exit function
-		# otherwise, perform analysis
-		# 	Load in reference eSpec Data
-		# 	Analyse each shot in run and save key parameters to file using the standard save funcitons below
-		# 	update log
+	# ELECTRON ANALYSIS 
 
-		return 0
-
-	def getESpecCharge(self,useCalibration=True,overwriteData=False):
-		# Load the espec charge for the run from the analysed data
+	def performESpecAnalysis(self,useCalibration=True,overwriteData=False):
+		# Load the espec images for the run and analyse
 		# if it exists get it, if not, run initESpecAnalysis and update log
 		diag = 'HighESpec'
 		filePathDict = self.createRunPathLists(diag)
@@ -288,13 +279,13 @@ class dataRun:
 
 		for burstStr in filePathDict.keys():		
 			if useCalibration:
-				analysedData = ESpecAnalysis.extractCharge(filePathDict[burstStr],eSpecCalib)
+				analysedData = ESpecAnalysis.ESpecSCEC(filePathDict[burstStr],eSpecCalib)
 				# Save the data
 				analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecCharge')
 				self.saveData(analysisSavePath,analysedData)
 
 			else:
-				analysedData = ESpecAnalysis.extractCharge(filePathDict[burstStr])
+				analysedData = ESpecAnalysis.ESpecSCEC(filePathDict[burstStr])
 				# Save the data
 				analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecCharge_NoCalibration')
 				self.saveData(analysisSavePath,analysedData)
