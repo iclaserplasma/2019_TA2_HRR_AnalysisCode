@@ -30,16 +30,16 @@ class loadInDataToNumpy():
             print ("png files not yet supported")
             return None
         elif filePath.endswith(".txt"):
-            print ("Loading .txt")           
+            # print ("Loading .txt")           
             data = np.loadtxt(filePath)
         elif filePath.endswith(".tiff") or filePath.endswith(".TIFF"):
-            print ("Loading .tiff/TIFF")
+            # print ("Loading .tiff/TIFF")
             from skimage import io
             data = io.imread(filePath)
             data = data.astype(float)
             # print (type(data)) 
         elif filePath.endswith(".tif"):
-            print ("Loading .tif")            
+            # print ("Loading .tif")            
             from skimage import io
             data = io.imread(filePath)
             data = data.astype(float)

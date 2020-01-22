@@ -55,13 +55,14 @@ class fourier_filter_for_Phasemask(probe_image_analysis):
             for j in range(self.phase.shape[1]//2-x, self.phase.shape[1]//2+x):
                 self.F_image[i][j] = 0
                 
-    # def plot(self, image, cbarOn = True, title = ""):
-    #     plt.pcolormesh(image)
-    #     if cbarOn:
-    #         plt.colorbar()
-    #     plt.title(title)
-    #     plt.show()     
-        
+                
+''' 
+If running script by itself, the bottom version needs to be commented out,
+if running as part of densityExtraction the top version needs to be commented out.
+    This is due to the loading order of inherited classes. 
+    I have not yet figured this out 
+    CIDU
+'''        
 # class phi_to_rho(loadInDataToNumpy, fourier_filter_for_Phasemask):
 class phi_to_rho(fourier_filter_for_Phasemask):
     def __init__(self):

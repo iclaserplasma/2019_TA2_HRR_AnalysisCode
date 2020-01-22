@@ -32,7 +32,7 @@ class phaseShift(probe_image_analysis, filter_image):
         """ Plot the raw image with a colorbar
         """
         if self.refExists:
-            f, ax = plt.subplots(ncols = 2)
+            f, ax = plt.subplots(ncols = 2,sharex = True, sharey = True)
             plt.suptitle("Input Data")
             self.plot_data(self.im, show=False, ax = ax[0])
             self.plot_data(self.ref, show=False, ax = ax[1])            
@@ -352,7 +352,7 @@ class phaseShift(probe_image_analysis, filter_image):
         
         self.phase = unwrap_phase(self.phaseShift) 
         if plotting:
-            self.plot_data(self.phase)
+            self.plot_data(self.phase, cmap = 'jet')
 
 # =============================================================================
 # From here adding to get the creation of fringes
