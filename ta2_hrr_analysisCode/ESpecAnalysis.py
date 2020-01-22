@@ -106,10 +106,10 @@ def analyseImage(rawImage, calibrationTupel):
     # preparation of the calibration parameter (later move into the calibration prep above)
     # The cut off is an index, which indicates, where the calibration between image plate and camera image did not work.
     # This was due to a camera artifact (an imaging problem with the perplex glass)
-    Energy = E.T[CutOff:, :]
+    Energy = E[CutOff:]
     # the following parameters will be cut only if they are intended to be used.
     #    Length = L[:, CutOff:]
-    #    dxoverdE = dxoverdE[:, CutOff:]  # MIGHT BE WRONG
+    dxoverdE = dxoverdE[CutOff:]  # MIGHT BE WRONG
     #    BackgroundImage = BckgndImage[:, CutOff:]
     BackgroundNoise = BackgroundNoise[:, CutOff:]
 
@@ -122,10 +122,10 @@ def analyseImage(rawImage, calibrationTupel):
     WarpedImageWithoutBckgnd = imageTransformation(image, calibrationTupel)
     # correctly integrating the spectrum and change the units from counts/mm -> counts/MeV
     Spectrum = electronSpectrum(WarpedImageWithoutBckgnd, dxoverdE, L)
-    ChargeInCounts = np.trapz(Spectrum.T, E.T)  # correct integration of the entire image
+    ChargeInCounts = np.trapz(Spectrum, Energy)  # correct integration of the entire image
     Charge = ChargeInCounts * fCperCounts  # Charge in fC
-    Spectrum = Spectrum[:, CutOff:]  # cutting off the low energy bit as described above
     Spectrum = Spectrum * fCperCounts  # changing the units from counts/MeV -> fC/MeV
+    SignificanceLevel = 5
     BackgroundStd_SigmaLevel = np.sum(BackgroundNoise, axis=0) * SignificanceLevel
     cutoffEnergy95 = determine95percentCharge(Energy, Spectrum, BackgroundStd_SigmaLevel)
     totalEnergy = determineTotalEnergy(Energy, Spectrum, BackgroundStd_SigmaLevel)
@@ -136,8 +136,8 @@ def imageTransformation(image, calibrationTupel):
     J, _, pts, _, _, BackgroundImage, _, CutOff, _ = calibrationTupel
     WarpedImage, __ = four_point_transform(image, pts, J)  # warp the image
     WarpedImage = np.fliplr(WarpedImage)  # the axis is flipped (high and low energy)
-    WarpedImage = WarpedImage[:, CutOff:]  # as mentioned above, the low energy part needs to be removed due artifacts
     WarpedImageWithoutBckgnd = WarpedImage - BackgroundImage  # background subtraction
+    WarpedImageWithoutBckgnd = WarpedImageWithoutBckgnd[:, CutOff:]  # as mentioned above, the low energy part needs to be removed due artifacts
     return WarpedImageWithoutBckgnd
 
 
@@ -168,11 +168,11 @@ def determine95percentCharge(E, Spectrum, BckStd_SigmaLevel):
     Note: BckStd_SigmaLevel has the dimension (num,) which means that Spectrum, having the dimension (num,1) needs to be taken
     """
     TmpSpectrum = np.zeros(Spectrum.shape)
-    Mask = np.greater(Spectrum[:, 0], BckStd_SigmaLevel)
+    Mask = np.greater(Spectrum, BckStd_SigmaLevel)
     if any(Mask) is True:
-        TmpSpectrum[Mask, 0] = Spectrum[Mask, 0]
-        TmpSpectrum = TmpSpectrum / np.trapz(TmpSpectrum.T, E.T)
-        CumTrapzMinus1IndexPrep = (TmpSpectrum[:-1, 0] + TmpSpectrum[1:, 0]) / 2 * np.diff(E, axis=0)[:, 0]
+        TmpSpectrum[Mask] = Spectrum[Mask]
+        TmpSpectrum = TmpSpectrum / np.trapz(TmpSpectrum, E)
+        CumTrapzMinus1IndexPrep = (TmpSpectrum[:-1] + TmpSpectrum[1:]) / 2 * np.diff(E, axis=0)
         CumTrapzMinus1 = np.cumsum(CumTrapzMinus1IndexPrep)
         MaskCumSum = np.append(np.array([True]), np.array([CumTrapzMinus1 < 0.95]))
         MaximumEnergy = np.amax(E[MaskCumSum, :])
@@ -188,9 +188,9 @@ def determineTotalEnergy(E, Spectrum, BckStd_SigmaLevel):
     energy cut off.
     Note: BckStd_SigmaLevel has the dimension (num,) which means that Spectrum, having the dimension (num,1) needs to be taken
     """
-    Mask = np.greater(Spectrum[:, 0], BckStd_SigmaLevel)
+    Mask = np.greater(Spectrum, BckStd_SigmaLevel)
     if any(Mask) is True:
-        TotalEnergy = np.trapz(np.multiply(np.multiply(E[:, 0], Mask), Spectrum[:, 0]), E[:, 0])
+        TotalEnergy = np.trapz(np.multiply(np.multiply(E, Mask), Spectrum), E)
     else:
         TotalEnergy = 0
     return TotalEnergy
