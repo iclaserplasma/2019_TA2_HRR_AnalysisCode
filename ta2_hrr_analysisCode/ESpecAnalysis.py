@@ -74,32 +74,19 @@ def ImportImageFiles(FileList):
     return Images
 
 
-def extractSpectrum(FileList, CalibrationFilePath):
-    Images = ImportImageFiles(FileList)
-    calibrationTupel = getCalibrationParameter(CalibrationFilePath)
-    SpectrumInit, _ = analyseImage(Images[:, :, 0], calibrationTupel)
-    if len(FileList) > 1:
-        spectra = np.zeros([SpectrumInit.shape[0], SpectrumInit.shape[1], len(FileList)])
-        spectra[:, :, 0] = SpectrumInit
-        for i in range(1, len(FileList)):
-            spectra[:, :, i], _ = analyseImage(Images[:, :, i], calibrationTupel)
-    else:
-        spectra = SpectrumInit
-    return spectra
-
-
-def extractCharge(FileList, CalibrationFilePath):
-    Images = ImportImageFiles(FileList)
-    calibrationTupel = getCalibrationParameter(CalibrationFilePath)
-    _, ChrageInit = analyseImage(Images[:, :, 0], calibrationTupel)
-    if len(FileList) > 1:
-        Charge = np.zeros([len(FileList), ])
-        Charge[0] = SpectrumInit
-        for i in range(1, len(FileList)):
-            _, Charge[i] = analyseImage(Images[:, :, i], calibrationTupel)
-    else:
-        Charge = ChrageInit
-    return Charge
+def ESpecSCEC(FileList, calibrationTuple):
+    """
+    This function is supposed to be called from runData. It takes the list of file(path)s and the calibration tuple.
+    :param FileList:
+    :param calibrationTuple:
+    :return: List of analysed tuples. Each tuple (corresponding to
+    """
+    images = ImportImageFiles(FileList)
+    analysedData = []
+    for i in range(0, images.shape[2]):
+        analysedImage = analyseImage(images[:, :, i], calibrationTuple)
+        analysedData.append(analysedImage)
+    return analysedData
 
 
 def analyseImage(rawImage, calibrationTupel):
@@ -209,7 +196,7 @@ def determineTotalEnergy(E, Spectrum, BckStd_SigmaLevel):
 '''
 Below will be the code for creating the calibration file(s).
 For now though, the calibration files have been created during the experiment and it seems that they are reasonable good
-for this version of code (v0.1 20200106)  
+for this version of code (v0.1 20200106)
 '''
 
 
@@ -241,7 +228,7 @@ def changeFileEntry(NewEntry, runName, calPath=r'Y:\\ProcessedCalibrations'):
     writer = csv.writer(open(csvFile, 'w', newline=''))
     writer.writerows(entries)
     print('Changed run: %s of diagnostic %s to: \'%s\'. Previously it was \'%s\'.' % (
-    runName, 'HighESpec', NewEntry, oldEntry))
+        runName, 'HighESpec', NewEntry, oldEntry))
     return entries
 
 
@@ -296,7 +283,8 @@ def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedC
     #  since the image size might have varied during the day.
     if BackgroundImage != 0:
         foundDarkfields = 1
-    foundDarkfields = 0
+    else:
+        foundDarkfields = 0
     runDate = convertRunNameToDate(runName)
     backgroundPath = os.path.join(basePath, 'MIRAGE', 'HighESpec', '%d' % runDate, 'darkfield01')
     if not os.path.exists(backgroundPath):
@@ -533,7 +521,7 @@ Old code below ->
 
 def determineHighEnergyCutOff(E, Spectrum, BckStd_SigmaLevel):
     """
-    The Background is subtracted from the spectrum thus the noise level equals zero. 
+    The Background is subtracted from the spectrum thus the noise level equals zero.
     However the std of the noise should be determined and then a sigma level of that should be set to estimate the high
     energy cut off.
     Note: BckStd_SigmaLevel has the dimension (num,) which means that Spectrum, having the dimension (num,1) needs to be
@@ -570,7 +558,7 @@ def uint16ToDoubleJ2(J2, UintConversion):
 
 def determineHighEnergyCutOff(E, Spectrum, BckStd_SigmaLevel):
     """
-    The Background is subtracted from the spectrum thus the noise level equals zero. 
+    The Background is subtracted from the spectrum thus the noise level equals zero.
     However the std of the noise should be determined and then a sigma level of that should be set to estimate the high
     energy cut off.
     Note: BckStd_SigmaLevel has the dimension (num,) which means that Spectrum, having the dimension (num,1) needs to be taken

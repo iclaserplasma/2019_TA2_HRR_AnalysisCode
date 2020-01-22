@@ -5,11 +5,16 @@ from scipy.signal import medfilt
 from sqlDatabase import connectToSQL
 import logging
 import csv 
-
+try:
+    import cPickle as pickle
+except ModuleNotFoundError:
+    import pickle
 
 # IMPORT DIAGNOSTIC CODES
 import SPIDERAnalysis
 import HASOAnalysis
+import ESpecAnalysis
+
 
 # HELPER FUNCTIONS - COULD BE PLACED ELSEWHERE?
 def getSortedFolderItems(itemPath,key):
@@ -31,6 +36,11 @@ def getShotFilePathDict(runPath):
 		filePathDict[b] = [os.path.join(bPath, f) for f in fileList]
 	return filePathDict
 
+def loadRunObject(path):
+	'''Load a pickled Run object'''
+	f = open(path, 'rb')
+	run = pickle.load(f)
+	return run
 
 class dataRun:
 
@@ -254,24 +264,35 @@ class dataRun:
 
 
 
-	# ELECTRON SPECTRUM ANALYSIS CALLS -- THIS IS CURRENTLY JUST AN EXAMPLE
-	def performESpecAnalysis(self,overwriteData=False):
-		# Check if analysed data already exists
-		# if it does and overWriteData == False, then exit function
-		# otherwise, perform analysis
-		# 	Load in reference eSpec Data
-		# 	Analyse each shot in run and save key parameters to file using the standard save funcitons below
-		# 	update log
+	# ELECTRON ANALYSIS 
 
-		return 0
-
-	def getESpecCharge(self,overwriteData):
-		# Load the espec charge for the run from the analysed data
+	def performESpecAnalysis(self,useCalibration=True,overwriteData=False):
+		# Load the espec images for the run and analyse
 		# if it exists get it, if not, run initESpecAnalysis and update log
-		return 0
+		diag = 'HighESpec'
+		filePathDict = self.createRunPathLists(diag)
+		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
+		
+		if useCalibration:
+			eSpecCalib = self.loadCalibrationData(diag)
+		# NEED TO PUT ALTERNATIVE CALIBRATION TUPLE HERE TO HELP NICS CODE RUN
+
+		for burstStr in filePathDict.keys():		
+			if useCalibration:
+				analysedData = ESpecAnalysis.ESpecSCEC(filePathDict[burstStr],eSpecCalib)
+				# Save the data
+				analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecCharge')
+				self.saveData(analysisSavePath,analysedData)
+
+			else:
+				analysedData = ESpecAnalysis.ESpecSCEC(filePathDict[burstStr])
+				# Save the data
+				analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecCharge_NoCalibration')
+				self.saveData(analysisSavePath,analysedData)
+			
+			print('Analysed ESpec Charge for Burst '+ burstStr)
 
 
-	#		getTemporalProfile
 
 	# SPIDER ANALYSIS CALLS -- THIS IS CURRENTLY JUST AN EXAMPLE
 	def getSpectralPhaseOrders(self):
@@ -491,7 +512,9 @@ class dataRun:
 		baseAnalysisFolder = self.baseAnalysisFolder
 		runDate = self.runDate
 		runName = self.runName
-		np.save(os.path.join(baseAnalysisFolder,'General',runDate,runName,'runObject'), self)
+		outputFile = open(os.path.join(baseAnalysisFolder,'General',runDate,runName,'runObject.pkl'), 'wb')
+		pickle.dump(self,outputFile,protocol=0)
+		outputFile.close()
 
 	
 	def loadCalibrationData(self, diag):
@@ -532,11 +555,10 @@ class dataRun:
 
 		# Now Load in the data 
 		try:
-			calibData = np.load(calibrationFilePath)
+			calibData = np.load(os.path.join(calibrationFolder,calibrationFilePath),allow_pickle=True)
 		except:
 			print('Info Recieved')
-			print(calibrationFolder)
-			print(calibrationPath)
+			print(os.path.join(calibrationFolder,calibrationFilePath))
 			raise Exception('COULD NOT LOAD CALIBRATION FILE, PLEASE CHECK IT EXISTS AND THE PATH IN calibrationPaths.csv IS CORRECT')
 
 
