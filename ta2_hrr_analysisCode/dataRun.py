@@ -247,18 +247,22 @@ class dataRun:
 
 
 	# SPIDER ANALYSIS CALLS -- THIS IS CURRENTLY JUST AN EXAMPLE
-	def getSpectralPhaseOrders(self):
+	def performSPIDERAnalysis(self):
 		diag = 'SPIDER'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
-		for burstStr in filePathDict.keys():		
-			analysedData = SPIDERAnalysis.polyOrders(filePathDict[burstStr])
-			# Save the data
-			analysisSavePath = os.path.join(analysisPath,burstStr,'analysis')
-			self.saveData(analysisSavePath,analysedData)
+		for burstStr in filePathDict.keys():	
+			for filePath in filePathDict[burstStr]:	
+				analysedData = SPIDERAnalysis.analyseSPIDERData(filePath)
+				
+				# Save the data
+				filename = filePath.split('\\')[-1]
+				filename = filename[0:-4] + '_Analysis'
 
-		# Print some shit to the log here. Someone to write function.
-
+				analysisSavePath = os.path.join(analysisPath,burstStr,filename)
+				self.saveData(analysisSavePath,analysedData)
+			self.logger.info('Performed SPIDER Analysis for ' + burstStr)
+			print('Analysed SPIDER '+ burstStr)
 		return 0
 
 	# HASO Analysis
@@ -282,7 +286,7 @@ class dataRun:
 				# Save the data
 				analysisSavePath = os.path.join(analysisPath,burstStr,'waveFrontOnLeakage')
 				self.saveData(analysisSavePath,analysedData)
-			
+			self.logger.info('Performed HASO Analysis for ' + burstStr)
 			print('Analysed HASO '+ burstStr)
 
 
