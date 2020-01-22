@@ -49,7 +49,10 @@ def TupelOfFiles(path="", Filetype=('.tif', '.tiff', '.TIFF', '.TIF')):
         for endings in Filetype:
             if files.endswith(endings):
                 FileList.append(os.path.join(path, files))
-    return FileList.sort(key=lambda entries: int(re.findall(r'\d+', entries)[0]))
+    def shotNr(name):
+        return int(re.findall(r'\d+', name)[-1])
+    FileList.sort(key=shotNr)
+    return FileList
 
 
 def ImportImageFiles(FileList):
@@ -103,12 +106,12 @@ def analyseImage(rawImage, calibrationTupel):
     # preparation of the calibration parameter (later move into the calibration prep above)
     # The cut off is an index, which indicates, where the calibration between image plate and camera image did not work.
     # This was due to a camera artifact (an imaging problem with the perplex glass)
-    Energy = E.T[self.CutOff:, :]
+    Energy = E.T[CutOff:, :]
     # the following parameters will be cut only if they are intended to be used.
-    #    Length = L[:, self.CutOff:]
-    #    dxoverdE = dxoverdE[:, self.CutOff:]  # MIGHT BE WRONG
-    #    BackgroundImage = BckgndImage[:, self.CutOff:]
-    BackgroundNoise = BackgroundNoise[:, self.CutOff:]
+    #    Length = L[:, CutOff:]
+    #    dxoverdE = dxoverdE[:, CutOff:]  # MIGHT BE WRONG
+    #    BackgroundImage = BckgndImage[:, CutOff:]
+    BackgroundNoise = BackgroundNoise[:, CutOff:]
 
     # here hard coded: the analysis of the image plates yield to a count to fC calibration of:
     fCperCounts = 2.7e-3
