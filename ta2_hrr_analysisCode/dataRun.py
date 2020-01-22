@@ -1,4 +1,4 @@
-﻿import os
+import os
 import matplotlib.pyplot as plt
 import numpy as np 
 from scipy.signal import medfilt
@@ -6,9 +6,9 @@ from sqlDatabase import connectToSQL
 import logging
 import csv 
 try:
-    import cPickle as pickle
+	import cPickle as pickle
 except ModuleNotFoundError:
-    import pickle
+	import pickle
 
 # IMPORT DIAGNOSTIC CODES
 import SPIDERAnalysis
@@ -45,50 +45,12 @@ def loadRunObject(path):
 class dataRun:
 
 
-
-	# -------------------------------------------------------------------------------------------------------------------
-	# -----										WHATS IN HERE????		 											-----
-	# -------------------------------------------------------------------------------------------------------------------
-
-	# Housekeeping and admin
-	#	__init__
-	#	findAvailableDiagnostics
-	#	runsOrBursts
-	#	createAnalysisFolder
-	#	collectSQLData
-	#
-	# Diagnostic Function Calls
-	# 	Espec
-	#		performESpecAnalysis
-	#		getESpecCharge
-	#	SPIDER
-	#		getSpectralPhaseOrders
-	#		getTemporalProfile
-	#	
-	# A Selection of Generic Functions
-	#	getDiagDataPath	
-	#	getDiagAnalysisPath
-	#	getImage
-	#	averageImagesInFolder
-	#	averageReferenceImages
-	#	getCounts
-	#	subtractRemainingBg
-	#	createDataBuckets
-	#
-	# Saving and Loading Analysed Data
-	#	saveData
-	#	saveRunObject
-
-
-
-
-
 	# -------------------------------------------------------------------------------------------------------------------
 	# -----										HOUSEKEEPING AND ADMIN	 											-----
 	# -------------------------------------------------------------------------------------------------------------------
 
 
-	def __init__(self, baseDataFolder, baseAnalysisFolder, calibrationFolder, runDate, runName,refRunDate,refRunName,verbose=0):
+	def __init__(self, baseDataFolder, baseAnalysisFolder, calibrationFolder, runDate, runName,verbose=0):
 		# baseDataFolder is the location of the Mirage Data folder
 		# runDate is a string
 		# runName is a string
@@ -114,16 +76,6 @@ class dataRun:
 		self.diagShotDict 		= diagShotDict
 		self.analysisPath 		= self.createAnalysisFolder()
 
-		# Reference Information
-		self.refRunDate			= refRunDate
-		self.refRunName			= refRunName
-		self.refDiagList 		= self.findAvailableDiagnostics(refRunDate,refRunName)
-		refStyle, refShots, refShotDict	= self.runsOrBursts(refRunDate,refRunName,self.refDiagList)
-		self.refStyle 			= refStyle
-		self.refShots			= refShots
-		self.refShotDict 		= refShotDict
-		
-
 
 		# Collect SQL Data
 		self.collectSQLData()
@@ -138,12 +90,12 @@ class dataRun:
 		unavailableDiags = []
 
 		for diag in diagList:
-		    diagAvailable = True
-		    diagAvailable = os.path.exists(os.path.join(baseDataFolder, diag, runDate, runName))
-		    if diagAvailable is not True:
-		        unavailableDiags.append(diag)
+			diagAvailable = True
+			diagAvailable = os.path.exists(os.path.join(baseDataFolder, diag, runDate, runName))
+			if diagAvailable is not True:
+				unavailableDiags.append(diag)
 		for diag in unavailableDiags:
-		    diagList.remove(diag)
+			diagList.remove(diag)
 		
 		self.logger.info('\n\nList of Available Diagnostics for ' + os.path.join(runDate,runName) + '\n')
 		for element in diagList:
@@ -246,9 +198,9 @@ class dataRun:
 		gasCellLength = {}
 
 		for datum in SQLData:
-		    shotOrBurst,Pressure,Length = datum
-		    gasCellPressure[shotOrBurst] = Pressure
-		    gasCellLength[shotOrBurst] = Length
+			shotOrBurst,Pressure,Length = datum
+			gasCellPressure[shotOrBurst] = Pressure
+			gasCellLength[shotOrBurst] = Length
 
 		analysisPath,isItReal = self.getDiagAnalysisPath('General')
 		self.saveData(os.path.join(analysisPath,'GasCellPressure'),gasCellPressure)
@@ -345,7 +297,6 @@ class dataRun:
 
 	def getDiagDataPath(self,diag):
 		# Gives you back the relative paths to retrieve data from
-		# DOESN'T WORK FOR ANALYSIS OF DARKFIELDS OR REFERNECES
 		baseDataFolder 	= self.baseDataFolder
 		runDate 		   	= self.runDate
 		runName				= self.runName
@@ -356,7 +307,6 @@ class dataRun:
 
 	def getDiagAnalysisPath(self,diag):
 		# Gives you back the relative analysis path to save analysis data or retrieve analysis data from
-		# DOESN'T WORK FOR ANALYSIS OF DARKFIELDS OR REFERNECES
 		baseAnalysisFolder 	= self.baseAnalysisFolder
 		runDate 		   	= self.runDate
 		runName				= self.runName
@@ -396,17 +346,13 @@ class dataRun:
 			img = img/cntr
 		return(img)
 
-	def averageReferenceImages(self,diag):
+	def averageReferenceImages(self,diag, refRunDate,refRunName):
 		# Average the images of a particular diagnostic
 		baseDataFolder = self.baseDataFolder
-		
-		# First lets get the reference counts
-		refRunDate = self.refRunDate
-		refRunName = self.refRunName
 
+		dataStyle, shots, diagShotDict = runsOrBursts(runDate,runName,diagList)
 		refPath = os.path.join(baseDataFolder,diag,refRunDate,refRunName)
-
-		if type(self.refShots) is tuple:
+		if dataStyle == 'burst':
 			# In this case go through burst by burst
 			bursts = os.listdir(refPath)
 			bgImg = None
@@ -445,39 +391,39 @@ class dataRun:
 
 
 	def createDataBuckets(arr):
-	    # Bin the data using too many (although still a reasonable amount of) bins.
-	    numElements = round(len(arr)/2)
-	    bins = np.linspace(np.amin(arr),np.amax(arr),numElements)
-	    vals,edges=np.histogram(arr,bins)
+		# Bin the data using too many (although still a reasonable amount of) bins.
+		numElements = round(len(arr)/2)
+		bins = np.linspace(np.amin(arr),np.amax(arr),numElements)
+		vals,edges=np.histogram(arr,bins)
 
-	    # Fourier transform this
-	    BFT = np.fft.fft(vals)
+		# Fourier transform this
+		BFT = np.fft.fft(vals)
 
-	    # Find the first peak of the FFT that isn't the DC peak
-	    peaks,properties = find_peaks(BFT)
-	    sortedIndexs = np.argsort(BFT[peaks]) # sorts in ascending order
-	    sortedIndexs[-2:]
-	    peaks = peaks[sortedIndexs[-2:]]
-	    peak = np.amin(peaks)
+		# Find the first peak of the FFT that isn't the DC peak
+		peaks,properties = find_peaks(BFT)
+		sortedIndexs = np.argsort(BFT[peaks]) # sorts in ascending order
+		sortedIndexs[-2:]
+		peaks = peaks[sortedIndexs[-2:]]
+		peak = np.amin(peaks)
 
-	    # This tells us the number of bins (minus 1) that should be used in the binning
-	    numElements = peak + 1
-	    #bins = np.linspace(np.amin(arr),np.amax(arr),numElements)
-	    #vals,edges=np.histogram(arr,bins)
+		# This tells us the number of bins (minus 1) that should be used in the binning
+		numElements = peak + 1
+		#bins = np.linspace(np.amin(arr),np.amax(arr),numElements)
+		#vals,edges=np.histogram(arr,bins)
 
-	    # find the average value in the first bucket and the last bucket
-	    datRange = np.amax(arr) - np.amin(arr)
-	    binWidth = datRange/numElements
-	    tmp = np.where(arr < np.amin(arr)+ binWidth)
-	    bin1 = np.mean([arr[i] for i in tmp[0]])
+		# find the average value in the first bucket and the last bucket
+		datRange = np.amax(arr) - np.amin(arr)
+		binWidth = datRange/numElements
+		tmp = np.where(arr < np.amin(arr)+ binWidth)
+		bin1 = np.mean([arr[i] for i in tmp[0]])
 
-	    tmp2 = np.where(arr > np.amax(arr)- binWidth)
-	    bin2 = np.mean([arr[i] for i in tmp2[0]])
+		tmp2 = np.where(arr > np.amax(arr)- binWidth)
+		bin2 = np.mean([arr[i] for i in tmp2[0]])
 
-	    binCenters = np.linspace(bin1,bin2,numElements)
-	    binWidth = (bin2-bin1)/numElements
-	    
-	    return binCenters,binWidth
+		binCenters = np.linspace(bin1,bin2,numElements)
+		binWidth = (bin2-bin1)/numElements
+		
+		return binCenters,binWidth
 
 
 
