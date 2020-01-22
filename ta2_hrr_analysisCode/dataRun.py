@@ -233,7 +233,7 @@ class dataRun:
 			if useCalibration:
 				analysedData = ESpecAnalysis.ESpecSCEC(filePathDict[burstStr],eSpecCalib)
 				# Save the data
-				analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecCharge')
+				analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecSpectrumChargeEnergyCutOff')
 				self.saveData(analysisSavePath,analysedData)
 
 			else:
@@ -242,7 +242,7 @@ class dataRun:
 				analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecCharge_NoCalibration')
 				self.saveData(analysisSavePath,analysedData)
 			
-			print('Analysed ESpec Charge for Burst '+ burstStr)
+			print('Analysed ESpec Spectrum, Charge, totalEnergy, cutoffEnergy95 for Burst '+ burstStr)
 
 
 
