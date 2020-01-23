@@ -125,7 +125,7 @@ def analyseImage(rawImage, calibrationTuple):
     ChargeInCounts = np.trapz(Spectrum, Energy)  # correct integration of the entire image
     Charge = ChargeInCounts * fCperCounts  # Charge in fC
     Spectrum = Spectrum * fCperCounts  # changing the units from counts/MeV -> fC/MeV
-    SignificanceLevel = 5
+    SignificanceLevel = 1
     BackgroundStd_SigmaLevel = np.sum(BackgroundNoise, axis=0) * SignificanceLevel
     cutoffEnergy95 = determine95percentCharge(Energy, Spectrum, BackgroundStd_SigmaLevel)
     totalEnergy = determineTotalEnergy(Energy, Spectrum, BackgroundStd_SigmaLevel)
@@ -398,7 +398,7 @@ def backgroundImages(Path, J, pts):
         FileList = TupleOfFiles(Path)
         BackgroundImages = ImportImageFiles(FileList)
         BackgroundImage = np.mean(BackgroundImages, axis=2)
-        BackgroundNoise = np.std(BackgroundImages, axis=2)
+        BackgroundNoise = np.std(BackgroundImages, axis=2) / np.sqrt(BackgroundImages.shape[-1])
         WarpedBackgroundImage, ___ = four_point_transform(BackgroundImage, pts, J)
         BackgroundNoise, ___ = four_point_transform(BackgroundNoise, pts, J)
         WarpedBackgroundImage = np.fliplr(WarpedBackgroundImage)
