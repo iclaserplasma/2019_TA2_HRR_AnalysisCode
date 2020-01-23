@@ -175,7 +175,7 @@ def determine95percentCharge(E, Spectrum, BckStd_SigmaLevel):
         CumTrapzMinus1IndexPrep = (TmpSpectrum[:-1] + TmpSpectrum[1:]) / 2 * np.diff(E, axis=0)
         CumTrapzMinus1 = np.cumsum(CumTrapzMinus1IndexPrep)
         MaskCumSum = np.append(np.array([True]), np.array([CumTrapzMinus1 < 0.95]))
-        MaximumEnergy = np.amax(E[MaskCumSum, :])
+        MaximumEnergy = np.amax(E[MaskCumSum])
     else:
         MaximumEnergy = 0
     return MaximumEnergy
@@ -333,6 +333,11 @@ def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedC
         relPathForDatabase = os.path.join('HighESpec', '%d' % runDate, '%s.npy' % simpleRunName)
         changeFileEntry(relPathForDatabase, runName, calPath)
     else:
+        totalCalibrationFilePath = os.path.join(calPath, 'HighESpec', '%d' % runDate)
+        if not os.path.exists(totalCalibrationFilePath):
+            os.mkdir(totalCalibrationFilePath)
+        simpleRunName = runName[9:]
+        calFile = os.path.join(totalCalibrationFilePath, simpleRunName)
         if os.path.exists(calFile):
             os.remove(calFile)
             changeFileEntry('', runName, calPath)
