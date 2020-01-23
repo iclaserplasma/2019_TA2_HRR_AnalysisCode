@@ -39,7 +39,7 @@ def simpleFolderFinder(runPath):
     return runPath
 
 
-def TupelOfFiles(path="", Filetype=('.tif', '.tiff', '.TIFF', '.TIF')):
+def TupleOfFiles(path="", Filetype=('.tif', '.tiff', '.TIFF', '.TIF')):
     if not isinstance(Filetype, list):
         Filetype = list(Filetype)
     if len(path) == 0:
@@ -92,7 +92,7 @@ def ESpecSCEC(FileList, calibrationTuple):
     return analysedData
 
 
-def analyseImage(rawImage, calibrationTupel):
+def analyseImage(rawImage, calibrationTuple):
     """
     This function is the main analysis function. It takes an image together with the calibration parameter to calculate
     various information from the high energy electrons spectrometer.
@@ -102,7 +102,7 @@ def analyseImage(rawImage, calibrationTupel):
     :return:
 
     """
-    J, W, pts, E, dxoverdE, BackgroundImage, L, CutOff, BackgroundNoise = calibrationTupel
+    J, W, pts, E, dxoverdE, BackgroundImage, L, CutOff, BackgroundNoise = calibrationTuple
     # preparation of the calibration parameter (later move into the calibration prep above)
     # The cut off is an index, which indicates, where the calibration between image plate and camera image did not work.
     # This was due to a camera artifact (an imaging problem with the perplex glass)
@@ -119,7 +119,7 @@ def analyseImage(rawImage, calibrationTupel):
 
     # now to the analysis:
     image = rawImage.astype(float)
-    WarpedImageWithoutBckgnd = imageTransformation(image, calibrationTupel)
+    WarpedImageWithoutBckgnd = imageTransformation(image, calibrationTuple)
     # correctly integrating the spectrum and change the units from counts/mm -> counts/MeV
     Spectrum = electronSpectrum(WarpedImageWithoutBckgnd, dxoverdE, L)
     ChargeInCounts = np.trapz(Spectrum, Energy)  # correct integration of the entire image
@@ -132,8 +132,8 @@ def analyseImage(rawImage, calibrationTupel):
     return Spectrum, Charge, totalEnergy, cutoffEnergy95
 
 
-def imageTransformation(image, calibrationTupel):
-    J, _, pts, _, _, BackgroundImage, _, CutOff, _ = calibrationTupel
+def imageTransformation(image, calibrationTuple):
+    J, _, pts, _, _, BackgroundImage, _, CutOff, _ = calibrationTuple
     WarpedImage, __ = four_point_transform(image, pts, J)  # warp the image
     WarpedImage = np.fliplr(WarpedImage)  # the axis is flipped (high and low energy)
     WarpedImageWithoutBckgnd = WarpedImage - BackgroundImage  # background subtraction
@@ -260,7 +260,7 @@ def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedC
     """
     runPath = os.path.join(basePath, 'MIRAGE', 'HighESpec', runName)
     imageFolderPath = simpleFolderFinder(runPath)
-    FileList = TupelOfFiles(imageFolderPath)
+    FileList = TupleOfFiles(imageFolderPath)
     testImage = ImportImageFiles([FileList[0]])
     if testImage.shape[0] < 1216:
         pts = np.array([[40, 659 - 328], [41, 380 - 328], [1905, 389 - 328],
@@ -295,7 +295,7 @@ def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedC
               'image is missing.')
     else:
         backgroundImagesPath = simpleFolderFinder(backgroundPath)
-        FileList = TupelOfFiles(backgroundImagesPath)
+        FileList = TupleOfFiles(backgroundImagesPath)
         testBackground = ImportImageFiles([FileList[0]])
         if testImage.shape[0] != testBackground.shape[0]:
             backgroundPath = os.path.join(basePath, 'MIRAGE', 'HighESpec', '%d' % runDate, 'darkfield02')
@@ -305,7 +305,7 @@ def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedC
                     'will be updated, but the background image is missing.')
             else:
                 backgroundImagesPath = simpleFolderFinder(backgroundPath)
-                FileList = TupelOfFiles(backgroundImagesPath)
+                FileList = TupleOfFiles(backgroundImagesPath)
                 testBackground = ImportImageFiles([FileList[0]])
                 if testImage.shape[0] != testBackground.shape[0]:
                     print(
@@ -316,7 +316,7 @@ def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedC
         else:
             foundDarkfields = 1
     if foundDarkfields:
-        if BackgroundImage != 0:
+        if BackgroundImage == 0:
             BackgroundImage, BackgroundNoise = backgroundImages(backgroundImagesPath, J, pts)
         #  now loading the right magnet map
         FileLocation = os.path.join(basePath, 'Calibrations', 'HighESpec')
@@ -327,8 +327,8 @@ def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedC
             os.mkdir(totalCalibrationFilePath)
         simpleRunName = runName[9:]
         calFile = os.path.join(totalCalibrationFilePath, simpleRunName)
-        calibrationTupel = (J, W, pts, E, dxoverdE, BackgroundImage, L, CutOff, BackgroundNoise)
-        np.save(calFile, calibrationTupel)
+        calibrationTuple = (J, W, pts, E, dxoverdE, BackgroundImage, L, CutOff, BackgroundNoise)
+        np.save(calFile, calibrationTuple)
         #  the entry for the database is a relative path:
         relPathForDatabase = os.path.join('HighESpec', '%d' % runDate, '%s.npy' % simpleRunName)
         changeFileEntry(relPathForDatabase, runName, calPath)
@@ -390,7 +390,7 @@ def convertRunNameToDate(runName):
 
 def backgroundImages(Path, J, pts):
     if len(Path) > 0:
-        FileList = TupelOfFiles(Path)
+        FileList = TupleOfFiles(Path)
         BackgroundImages = ImportImageFiles(FileList)
         BackgroundImage = np.mean(BackgroundImages, axis=2)
         BackgroundNoise = np.std(BackgroundImages, axis=2)
@@ -513,175 +513,3 @@ def getJacobianAndSpatialCalibration(OrgImageSize, WarpedImageSize, M, Length, S
     L = L / PixelLength * Length
     L = L + ScreenStart
     return Juv, L
-
-
-'''
-<- End the new code here
-------------------------------------------------------------------------------------------------------------------------
-Old code below ->
-'''
-
-
-def determineHighEnergyCutOff(E, Spectrum, BckStd_SigmaLevel):
-    """
-    The Background is subtracted from the spectrum thus the noise level equals zero.
-    However the std of the noise should be determined and then a sigma level of that should be set to estimate the high
-    energy cut off.
-    Note: BckStd_SigmaLevel has the dimension (num,) which means that Spectrum, having the dimension (num,1) needs to be
-    taken
-    """
-    Mask = np.greater(Spectrum[:, 0], BckStd_SigmaLevel)
-    if any(Mask) is True:
-        MaximumEnergy = np.amax(E[Mask])
-    else:
-        MaximumEnergy = 0
-    return MaximumEnergy
-
-
-def map_function_AverageCutOff(data):
-    data = np.array(data)
-    Mask = data > 0
-    NullShots = sum(data == 0)
-    if NullShots is data.shape[0]:
-        EnergyAv = 0
-        EnergyStd = None
-    elif NullShots is data.shape[0] - 1:
-        EnergyAv = data[Mask]
-        EnergyStd = None
-    else:
-        EnergyAv = np.mean(data[Mask])
-        EnergyStd = np.std(data[Mask]) / len(data[Mask])
-    return EnergyAv, EnergyStd, NullShots
-
-
-def uint16ToDoubleJ2(J2, UintConversion):
-    J2 = J2.astype(float) / UintConversion[0] * UintConversion[1] + UintConversion[2]
-    return J2
-
-
-def determineHighEnergyCutOff(E, Spectrum, BckStd_SigmaLevel):
-    """
-    The Background is subtracted from the spectrum thus the noise level equals zero.
-    However the std of the noise should be determined and then a sigma level of that should be set to estimate the high
-    energy cut off.
-    Note: BckStd_SigmaLevel has the dimension (num,) which means that Spectrum, having the dimension (num,1) needs to be taken
-    """
-    Mask = np.greater(Spectrum[:, 0], BckStd_SigmaLevel)
-    if any(Mask) is True:
-        MaximumEnergy = np.amax(E[Mask])
-    else:
-        MaximumEnergy = 0
-    return MaximumEnergy
-
-
-def map_function_AverageCutOff(data):
-    data = np.array(data)
-    Mask = data > 0
-    NullShots = sum(data == 0)
-    if NullShots == data.shape[0]:
-        EnergyAv = 0
-        EnergyStd = None
-    elif NullShots == data.shape[0] - 1:
-        EnergyAv = data[Mask]
-        EnergyStd = None
-    else:
-        print('No Nullshots!')
-        EnergyAv = np.mean(data[Mask])
-        EnergyStd = np.std(data[Mask]) / len(data[Mask])
-    return EnergyAv, EnergyStd, NullShots
-
-
-def returnEnergyCutOff(RunName):
-    HighESpecClass = Espec(RunName, ta2_hrr_2019.utils.DATA_FOLDER, 'HighESpec')
-    BackgroundNoise = HighESpecClass.BackgroundNoise * HighESpecClass.fCperCounts
-
-    def map_function_CutOffEnergy(data):
-        Spectrum, ____ = HighESpecClass.SpectrumFromImagefC(data)
-        SignificanceLevel = 5
-        MaximumEnergy = determineHighEnergyCutOff(HighESpecClass.Energy, (Spectrum.T),
-                                                  np.sum(BackgroundNoise, axis=0) * SignificanceLevel)
-        return MaximumEnergy
-
-    pipeline_CutOff = mirage_analysis.DataPipeline('HighESpec', map_function_CutOffEnergy, map_function_AverageCutOff)
-    return pipeline_CutOff.run(RunName)
-
-
-def returnTotalEnergy(RunName):
-    HighESpecClass = Espec(RunName, ta2_hrr_2019.utils.DATA_FOLDER, 'HighESpec')
-    BackgroundNoise = HighESpecClass.BackgroundNoise * HighESpecClass.fCperCounts
-
-    def map_function_TotalEnergy(data):
-        Spectrum, ____ = HighESpecClass.SpectrumFromImagefC(data)
-        SignificanceLevel = 5
-        TotalEnergy = determineTotalEnergy(HighESpecClass.Energy, (Spectrum.T),
-                                           np.sum(BackgroundNoise, axis=0) * SignificanceLevel)
-        return TotalEnergy
-
-    pipeline_TotalEnergy = mirage_analysis.DataPipeline('HighESpec', map_function_TotalEnergy,
-                                                        map_function_AverageCutOff)
-    return pipeline_TotalEnergy.run(RunName)
-
-
-'''
-def getCalibrationParameter(CalibrationFilePath):
-    """
-    The calibration files in the folder defined by "CalibrationFilePath" can be loaded with this function.
-    The output is a tupel, containing all important parameter:
-    J               Jacobian matrix for the correct normalisation of the warping of the espec image
-    W               Width of the camera image in mm
-    pts             The four points, which are used to warp the image and make it flat
-    E               Energy information of the length of the lanex screen
-    dxoverdE        For later to change the units of the lanex screen between mm to MeV
-    BckgndImage     Taken previous to subtract from the image
-    L               Length of the lanex. This is the energy dependend axis. In mm.
-    CutOff          Beginning of the lanex screen has imaging artifacts and doesn't contain real data. Its simply cut.
-    BackgroundNoise Std of the background images (to put the noise level of the image into statistic relevant context.
-    """
-    ImageWarpingFile = 'CalibrationParamters.mat'
-    ImageWarpingVariable = ['Jacobian', 'Length', 'Width', 'pts', 'BckgndImage', 'CutOff', 'BackgroundNoise']
-    CompleteSetVar = loadMatFile(CalibrationFilePath, ImageWarpingFile, ImageWarpingVariable)
-    J, L, W, pts, BckgndImage, CutOff, BackgroundNoise = CompleteSetVar
-    ImageWarpingFile = 'PositionVsEnergy.mat'
-    ImageWarpingVariable = ['Screen', 'EnergyOnAverage']
-    ScreenEnergyOnAverage = loadMatFile(CalibrationFilePath, ImageWarpingFile, ImageWarpingVariable)
-    Screen, EnergyOnAverage = ScreenEnergyOnAverage
-    Screen = Screen * 1e3  # in mm
-    poly3 = np.poly1d(np.polyfit(Screen[0, :], EnergyOnAverage[0, :], 3))
-    E = poly3(L)
-    dpoly3 = np.polyder(poly3)
-    dEoverdx = dpoly3(L)
-    dxoverdE = 1 / dEoverdx
-    return J, W, pts, E, dxoverdE, BckgndImage, L, CutOff, BackgroundNoise
-
-
-def getCalibrationParameter(CalibrationIndicator):
-    """
-    The calibration indicator contains of a letter, describing if the images referring to this date is a cropped image
-    and a date, which represent a specific background image.
-    The output is a tupel, containing all important parameter:
-    J               Jacobian matrix for the correct normalisation of the warping of the espec image
-    W               Width of the camera image in mm
-    pts             The four points, which are used to warp the image and make it flat
-    E               Energy information of the length of the lanex screen
-    dxoverdE        For later to change the units of the lanex screen between mm to MeV
-    BckgndImage     Taken previous to subtract from the image
-    L               Length of the lanex. This is the energy dependend axis. In mm.
-    CutOff          Beginning of the lanex screen has imaging artifacts and doesn't contain real data. Its simply cut.
-    BackgroundNoise Std of the background images (to put the noise level of the image into statistic relevant context.
-    """
-    ImageWarpingFile = 'CalibrationParamters.mat'
-    ImageWarpingVariable = ['Jacobian', 'Length', 'Width', 'pts', 'BckgndImage', 'CutOff', 'BackgroundNoise']
-    CompleteSetVar = loadMatFile(CalibrationFilePath, ImageWarpingFile, ImageWarpingVariable)
-    J, L, W, pts, BckgndImage, CutOff, BackgroundNoise = CompleteSetVar
-    ImageWarpingFile = 'PositionVsEnergy.mat'
-    ImageWarpingVariable = ['Screen', 'EnergyOnAverage']
-    ScreenEnergyOnAverage = loadMatFile(CalibrationFilePath, ImageWarpingFile, ImageWarpingVariable)
-    Screen, EnergyOnAverage = ScreenEnergyOnAverage
-    Screen = Screen * 1e3  # in mm
-    poly3 = np.poly1d(np.polyfit(Screen[0, :], EnergyOnAverage[0, :], 3))
-    E = poly3(L)
-    dpoly3 = np.polyder(poly3)
-    dEoverdx = dpoly3(L)
-    dxoverdE = 1 / dEoverdx
-    return J, W, pts, E, dxoverdE, BckgndImage, L, CutOff, BackgroundNoise
-'''

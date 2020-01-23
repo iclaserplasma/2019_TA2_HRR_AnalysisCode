@@ -17,6 +17,7 @@ from scipy import optimize
 import csv
 from shapely.geometry import Point, Polygon
 import pkg_resources
+import re
 
 
 def XRayEcrit(FileList, calibrationTuple):
@@ -158,11 +159,10 @@ def getValues(Image, indicesList):
     ValueList = []
     for i in range(0, len(indicesList)):
         Indices = indicesList[i]
-        numberOfPoints = np.sum([len(x) for x in Indices])
-        Values = np.zeros(numberOfPoints)
+        Values = np.zeros(len(Indices))
         for j in range(0, len(Indices)):
             polygonPoints = Indices[j]
-            Values[j:len(polygonPoints)-1] = Image[[l[1] for l in polygonPoints], [l[0] for l in polygonPoints]]
+            Values[j] = Image[polygonPoints[1], polygonPoints[0]]
         ValueList.append(Values)
     return ValueList
 
@@ -213,7 +213,7 @@ def findCalibrationEntry(runName, calPath):
     return entries, identifiedRun, identifiedDiag
 
 
-def changeFileEntry(NewEntry, runName, calPath=r'Y:\\ProcessedCalibrations'):
+def changeFileEntry(NewEntry, runName, calPath=r'Y:\ProcessedCalibrations'):
     entries, identifiedRun, identifiedDiag = findCalibrationEntry(runName, calPath)
     oldEntry = entries[identifiedRun][identifiedDiag]
     if oldEntry == '':
@@ -248,14 +248,19 @@ def simpleFolderFinder(runPath):
     return runPath
 
 
-def TupleOfFiles(path="", Filetype=".tif"):
+def TupleOfFiles(path="", Filetype=('.tif', '.tiff', '.TIFF', '.TIF')):
+    if not isinstance(Filetype, list):
+        Filetype = list(Filetype)
     if len(path) == 0:
         path = "."
     FileList = []
     for files in os.listdir(path):
-        if files.endswith(Filetype):
-            FileList.append(os.path.join(path, files))
-            print(FileList[-1])
+        for endings in Filetype:
+            if files.endswith(endings):
+                FileList.append(os.path.join(path, files))
+    def shotNr(name):
+        return int(re.findall(r'\d+', name)[-1])
+    FileList.sort(key=shotNr)
     return FileList
 
 
@@ -314,18 +319,14 @@ def convertRunNameToDate(runName):
 
 
 def backgroundImages(Path):
-    if len(Path) > 0:
-        FileList = TupleOfFiles(Path)
-        BackgroundImages = ImportImageFiles(FileList)
-        BackgroundImage = np.mean(BackgroundImages, axis=2)
-        BackgroundNoise = np.std(BackgroundImages, axis=2)
-    else:
-        BackgroundImage = 0
-        BackgroundNoise = 0
+    FileList = TupleOfFiles(Path)
+    BackgroundImages = ImportImageFiles(FileList)
+    BackgroundImage = np.mean(BackgroundImages, axis=2)
+    BackgroundNoise = np.std(BackgroundImages, axis=2)
     return BackgroundImage, BackgroundNoise
 
 
-def mainCalibrationFunction(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedCalibrations', BackgroundImage=0,
+def mainCalibrationFunction(runName, basePath='Z:\\', calPath='Y:\\ProcessedCalibrations', BackgroundImage=0,
                             BackgroundNoise=0):
     """
     The most important parameter, which is constructed here is the calibrationTuple. This is a tuple containing the
@@ -352,119 +353,127 @@ def mainCalibrationFunction(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedCal
     :param BackgroundNoise: ^
     :return: Saves the calibration tuple and changes the entry in the database
     """
-    txtFile = 'Compact2019OctoberTA2.txt'
-    txtFilePath = os.path.join(basePath, 'Calibrations', 'XRay', txtFile)
-    filterNames, ecrit, Y = importXRayTransmissions(txtFilePath)
-    TransmissionTuple = (filterNames, ecrit, Y)
-
-    runPath = os.path.join(basePath, 'MIRAGE', 'XRay', runName)
-    imageFolderPath = simpleFolderFinder(runPath)
-    FileList = TupleOfFiles(imageFolderPath)
-    testImage = ImportImageFiles([FileList[0]])
-
-    # Lead background
-    B = 'W'
-    PB = (np.array([[0, 57], [3, 55], [0, 44]]))
-    #  the non-filter background
-    F1 = 'Vac'
-    P1 = (np.array([[9, 61], [0, 66], [0, 255], [255, 255], [255, 188], [62, 245], [0, 4], [0, 36]]),
-          np.array([[24, 100], [25, 105], [63, 93], [102, 230], [107, 229], [71, 98], [110, 87], [147, 218], [156, 216],
-                    [124, 110], [163, 97], [196, 205], [200, 203], [175, 118], [215, 104], [241, 189], [246, 187],
-                    [223, 111], [256, 99], [256, 93], [220, 105], [191, 0], [184, 0], [213, 97], [173, 111], [140, 0],
-                    [134, 0], [161, 92], [121, 103], [90, 0], [85, 0], [109, 83], [69, 94], [41, 0], [35, 0], [61, 89]])
-          )
-    #  second to brightest area
-    F2 = 'C10H8O4'
-    P2 = (np.array([[181, 120], [210, 113], [231, 188], [204, 197]]),
-          np.array([[47, 4], [79, 4], [98, 77], [73, 86]]))
-    F3 = 'Mg'
-    P3 = (np.array([[157, 213], [190, 203], [160, 102], [129, 114]]),
-          np.array([[156, 87], [124, 97], [95, 0], [130, 0]]))
-    F4 = 'Al(0.95)'
-    P4 = (np.array([[141, 216], [111, 223], [77, 104], [106, 94]]),
-          np.array([[207, 93], [176, 103], [146, 0], [179, 0]]))
-    #  Darkest area:
-    F5 = 'Al(0.98)Mg(0.01)Si(0.01)'
-    P5 = (np.array([[98, 229], [67, 239], [31, 111], [59, 103]]),
-          np.array([[224, 97], [197, 3], [229, 3], [253, 90]]))
-    Fold = [F1, F2, F3, F4, F5]
-    Pold = [P1, P2, P3, P4, P5]
-    F = []
-    P = []
-
-    sizex, sizey = testImage
-    X, Y = np.meshgrid(range(sizex), range(sizey))
-    idx = X.ravel()
-    idy = Y.ravel()
-
-    for fN in filterNames:
-        cc = 0
-        Mask = []
-        for scan in Fold:
-            if scan == fN:
-                # check if this works... Not sure, because I overwrite it again...
-                P.append(getMaskFromPts(Pold[cc], idx, idy, []))
-            cc += 1
-
-    PixelSize = 13e-6
-    GasCell2Camera = 1.2
-    RepRate = 1
-    Alpha = 274
-    Alpha_error = 0.06
-    # additionally to the camera settings, the energy scale and the transmission through the background is necessary for
-    # for the photon flux:
-    txtFile = '2019OctoberTA2.txt'
-    txtFilePath = os.path.join(basePath, 'Calibrations', 'XRay', txtFile)
-    _, energy, TQ = importXRayTransmissions(txtFilePath)
-    TQ = TQ[:, 0]
-    CameraTuple = (PixelSize, GasCell2Camera, RepRate, Alpha, Alpha_error, energy, TQ)
-
-    if BackgroundImage != 0:
-        foundDarkfields = 1
-    else:
-        foundDarkfields = 0
     runDate = convertRunNameToDate(runName)
-    backgroundPath = os.path.join(basePath, 'MIRAGE', 'XRay', '%d' % runDate, 'darkfield01')
-    if not os.path.exists(backgroundPath):
-        print('WARNING E1: No darkfields were found. The calibration database will be updated, but the background '
-              'image is missing.')
-    else:
-        backgroundImagesPath = simpleFolderFinder(backgroundPath)
-        FileList = TupleOfFiles(backgroundImagesPath)
-        testBackground = ImportImageFiles([FileList[0]])
-        if testImage.shape[0] != testBackground.shape[0]:
-            backgroundPath = os.path.join(basePath, 'MIRAGE', 'XRay', '%d' % runDate, 'darkfield02')
-            if not os.path.exists(backgroundPath):
-                print(
-                    'WARNING E2: No darkfields with the right image dimensions were found. The calibration database '
-                    'will be updated, but the background image is missing.')
-            else:
-                backgroundImagesPath = simpleFolderFinder(backgroundPath)
-                FileList = TupleOfFiles(backgroundImagesPath)
-                testBackground = ImportImageFiles([FileList[0]])
-                if testImage.shape[0] != testBackground.shape[0]:
-                    print(
-                        'WARNING E3: No darkfields with the right image dimensions were found. The calibration '
-                        'database will be updated, but the background image is missing.')
-                else:
-                    foundDarkfields = 1
-        else:
-            foundDarkfields = 1
-    if foundDarkfields:
+    if runDate >= 20191108:
+        txtFile = 'Compact2019OctoberTA2.txt'
+        txtFilePath = os.path.join(basePath, 'Calibrations', 'XRay', txtFile)
+        filterNames, ecrit, Y = importXRayTransmissions(txtFilePath)
+        TransmissionTuple = (filterNames, ecrit, Y)
+
+        runPath = os.path.join(basePath, 'MIRAGE', 'XRay', runName)
+        imageFolderPath = simpleFolderFinder(runPath)
+        FileList = TupleOfFiles(imageFolderPath)
+        testImage = ImportImageFiles([FileList[0]])
+
+        # Lead background
+        B = 'W'
+        PB = (np.array([[0, 57], [3, 55], [0, 44]]))
+        #  the non-filter background
+        F1 = 'Vac'
+        P1 = (np.array([[9, 61], [0, 66], [0, 255], [255, 255], [255, 188], [62, 245], [0, 4], [0, 36]]),
+            np.array([[24, 100], [25, 105], [63, 93], [102, 230], [107, 229], [71, 98], [110, 87], [147, 218], [156, 216],
+                        [124, 110], [163, 97], [196, 205], [200, 203], [175, 118], [215, 104], [241, 189], [246, 187],
+                        [223, 111], [256, 99], [256, 93], [220, 105], [191, 0], [184, 0], [213, 97], [173, 111], [140, 0],
+                        [134, 0], [161, 92], [121, 103], [90, 0], [85, 0], [109, 83], [69, 94], [41, 0], [35, 0], [61, 89]])
+            )
+        #  second to brightest area
+        F2 = 'C10H8O4'
+        P2 = (np.array([[181, 120], [210, 113], [231, 188], [204, 197]]),
+            np.array([[47, 4], [79, 4], [98, 77], [73, 86]]))
+        F3 = 'Mg'
+        P3 = (np.array([[157, 213], [190, 203], [160, 102], [129, 114]]),
+            np.array([[156, 87], [124, 97], [95, 0], [130, 0]]))
+        F4 = 'Al(0.95)'
+        P4 = (np.array([[141, 216], [111, 223], [77, 104], [106, 94]]),
+            np.array([[207, 93], [176, 103], [146, 0], [179, 0]]))
+        #  Darkest area:
+        F5 = 'Al(0.98)Mg(0.01)Si(0.01)'
+        P5 = (np.array([[98, 229], [67, 239], [31, 111], [59, 103]]),
+            np.array([[224, 97], [197, 3], [229, 3], [253, 90]]))
+        Fold = [F1, F2, F3, F4, F5]
+        Pold = [P1, P2, P3, P4, P5]
+        F = []
+        P = []
+
+        sizex, sizey, _ = testImage.shape
+        X, Y = np.meshgrid(range(sizex), range(sizey))
+        idx = X.ravel()
+        idy = Y.ravel()
+
+        for fN in filterNames:
+            cc = 0
+            Mask = []
+            for scan in Fold:
+                if scan == fN:
+                    # check if this works... Not sure, because I overwrite it again...
+                    P.append(getMaskFromPts(Pold[cc], idx, idy, []))
+                cc += 1
+
+        PixelSize = 13e-6
+        GasCell2Camera = 1.2
+        RepRate = 1
+        Alpha = 274
+        Alpha_error = 0.06
+        # additionally to the camera settings, the energy scale and the transmission through the background is necessary for
+        # for the photon flux:
+        txtFile = '2019OctoberTA2.txt'
+        txtFilePath = os.path.join(basePath, 'Calibrations', 'XRay', txtFile)
+        _, energy, TQ = importXRayTransmissions(txtFilePath)
+        TQ = TQ[:, 0]
+        CameraTuple = (PixelSize, GasCell2Camera, RepRate, Alpha, Alpha_error, energy, TQ)
+
         if BackgroundImage != 0:
-            BackgroundImage, BackgroundNoise = backgroundImages(backgroundImagesPath)
-        ImageTransformationTuple = (P, BackgroundImage, BackgroundNoise)
-        totalCalibrationFilePath = os.path.join(calPath, 'XRay', '%d' % runDate)
-        if not os.path.exists(totalCalibrationFilePath):
-            os.mkdir(totalCalibrationFilePath)
-        simpleRunName = runName[9:]
-        calFile = os.path.join(totalCalibrationFilePath, simpleRunName)
-        calibrationTuple = (ImageTransformationTuple, CameraTuple, TransmissionTuple)
-        np.save(calFile, calibrationTuple)
-        #  the entry for the database is a relative path:
-        relPathForDatabase = os.path.join('XRay', '%d' % runDate, '%s.npy' % simpleRunName)
-        changeFileEntry(relPathForDatabase, runName, calPath)
+            foundDarkfields = 1
+        else:
+            foundDarkfields = 0
+        backgroundPath = os.path.join(basePath, 'MIRAGE', 'XRay', '%d' % runDate, 'darkfield01')
+        if not os.path.exists(backgroundPath):
+            print('WARNING E1: No darkfields were found. The calibration database will be updated, but the background '
+                'image is missing.')
+        else:
+            backgroundImagesPath = simpleFolderFinder(backgroundPath)
+            FileList = TupleOfFiles(backgroundImagesPath)
+            testBackground = ImportImageFiles([FileList[0]])
+            if testImage.shape[0] != testBackground.shape[0]:
+                backgroundPath = os.path.join(basePath, 'MIRAGE', 'XRay', '%d' % runDate, 'darkfield02')
+                if not os.path.exists(backgroundPath):
+                    print(
+                        'WARNING E2: No darkfields with the right image dimensions were found. The calibration database '
+                        'will be updated, but the background image is missing.')
+                else:
+                    backgroundImagesPath = simpleFolderFinder(backgroundPath)
+                    FileList = TupleOfFiles(backgroundImagesPath)
+                    testBackground = ImportImageFiles([FileList[0]])
+                    if testImage.shape[0] != testBackground.shape[0]:
+                        print(
+                            'WARNING E3: No darkfields with the right image dimensions were found. The calibration '
+                            'database will be updated, but the background image is missing.')
+                    else:
+                        foundDarkfields = 1
+            else:
+                foundDarkfields = 1
+        if foundDarkfields:
+            if BackgroundImage == 0:
+                BackgroundImage, BackgroundNoise = backgroundImages(backgroundImagesPath)
+            ImageTransformationTuple = (P, BackgroundImage, BackgroundNoise)
+            totalCalibrationFilePath = os.path.join(calPath, 'XRay', '%d' % runDate)
+            if not os.path.exists(totalCalibrationFilePath):
+                os.mkdir(totalCalibrationFilePath)
+            simpleRunName = runName[9:]
+            calFile = os.path.join(totalCalibrationFilePath, simpleRunName)
+            calibrationTuple = (ImageTransformationTuple, CameraTuple, TransmissionTuple)
+            np.save(calFile, calibrationTuple)
+            #  the entry for the database is a relative path:
+            relPathForDatabase = os.path.join('XRay', '%d' % runDate, '%s.npy' % simpleRunName)
+            changeFileEntry(relPathForDatabase, runName, calPath)
+        else:
+            totalCalibrationFilePath = os.path.join(calPath, 'XRay', '%d' % runDate)
+            if not os.path.exists(totalCalibrationFilePath):
+                os.mkdir(totalCalibrationFilePath)
+            simpleRunName = runName[9:]
+            calFile = os.path.join(totalCalibrationFilePath, simpleRunName)
+            if os.path.exists(calFile):
+                os.remove(calFile)
+                changeFileEntry('', runName, calPath)
     else:
-        if os.path.exists(calFile):
-            os.remove(calFile)
-            changeFileEntry('', runName, calPath)
+        print('There is no filter in the beam line')
