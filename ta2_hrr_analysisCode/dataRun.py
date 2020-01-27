@@ -19,6 +19,8 @@ import HASOAnalysis
 import ESpecAnalysis
 import PreCompNFAnalysis
 
+import probe_density_extraction 
+
 
 # HELPER FUNCTIONS - COULD BE PLACED ELSEWHERE?
 def getSortedFolderItems(itemPath,key):
@@ -218,10 +220,28 @@ class dataRun:
 	# -----										DIAGNOSTIC FUNCTION CALLS 											-----
 	# -------------------------------------------------------------------------------------------------------------------
 
+	# PROBE ANALYSIS
+	def performProbeDensityAnalysis(self, ):
+		diag = 'Probe_Interferometry'
+		print ("In ", diag)
 
+		filePathDict = self.createRunPathLists(diag)
+		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
+		print (analysisPath, pathExists)
+		
+		probeCalib = self.loadCalibrationData(diag)
+		for burstStr in filePathDict.keys():		
+			analysedData = probe_density_extraction.extract_plasma_density(
+								filePathDict[burstStr],eSpecCalib
+								)
+			
+			analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis')
+			self.saveData(analysisSavePath,analysedData)
+
+			self.logger.info('Performed {} Analysis for '.format(Diag) + burstStr)
+			print ('Analysed {} for '.format(Diag) + burstStr)		
 
 	# ELECTRON ANALYSIS 
-
 	def performESpecAnalysis(self,useCalibration=True,overwriteData=False):
 		# Load the espec images for the run and analyse
 		# if it exists get it, if not, run initESpecAnalysis and update log
@@ -255,10 +275,10 @@ class dataRun:
 		diag = 'SPIDER'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
-		if not pathExists:
-			print ("Making folder: ", analysisPath)
-			os.makedirs(analysisPath)
-		print (analysisPath)
+		# if not pathExists:
+		# 	print ("Making folder: ", analysisPath)
+		# 	os.makedirs(analysisPath)
+		# print (analysisPath)
 
 		for burstStr in filePathDict.keys():	
 			for filePath in filePathDict[burstStr]:	
