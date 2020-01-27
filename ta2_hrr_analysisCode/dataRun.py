@@ -5,6 +5,9 @@ from scipy.signal import medfilt
 from sqlDatabase import connectToSQL
 import logging
 import csv 
+# Works with file paths on all operating systems
+from pathlib import Path
+
 try:
 	import cPickle as pickle
 except ModuleNotFoundError:
@@ -14,6 +17,7 @@ except ModuleNotFoundError:
 import SPIDERAnalysis
 import HASOAnalysis
 import ESpecAnalysis
+
 
 
 # HELPER FUNCTIONS - COULD BE PLACED ELSEWHERE?
@@ -175,10 +179,10 @@ class dataRun:
 		if os.path.exists(analysisPath) is not True:
 			os.makedirs(analysisPath)
 			if self.verbose:
-				print('\n\nGeneral Analysis folder has been created\n')
+				print('\n\nGeneral Analysis folder has been created\n{}\n'.format(analysisPath))
 		else:
 			if self.verbose:
-				print('\n\nGeneral Analysis folder already exists\n')
+				print('\n\nGeneral Analysis folder already exists\n{}\n'.format(analysisPath))
 		return(analysisPath)
 
 
@@ -251,15 +255,22 @@ class dataRun:
 		diag = 'SPIDER'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
+		if not pathExists:
+			print ("Making folder: ", analysisPath)
+			os.makedirs(analysisPath)
+		print (analysisPath)
+
 		for burstStr in filePathDict.keys():	
 			for filePath in filePathDict[burstStr]:	
 				analysedData = SPIDERAnalysis.analyseSPIDERData(filePath)
 				
 				# Save the data
-				filename = filePath.split('\\')[-1]
+				l = Path(filePath)		# Splitting the filepath in all operating systems, '\\' and '/'
+				filename = l.parts[-1]
 				filename = filename[0:-4] + '_Analysis'
 
 				analysisSavePath = os.path.join(analysisPath,burstStr,filename)
+				print (analysisPath, analysisSavePath)
 				self.saveData(analysisSavePath,analysedData)
 			self.logger.info('Performed SPIDER Analysis for ' + burstStr)
 			print('Analysed SPIDER '+ burstStr)
