@@ -7,7 +7,7 @@
     /    |   /   |  |\ | ||_
    /____ |__/\ . |  | \|_|\_|
    __________________________ .
-Created on 27/01/2020, 14:25:27
+Created on 27/01/2020, 17:12:51
 @author: chrisunderwood
 """
 import numpy as np
@@ -535,7 +535,10 @@ class phaseShift(probe_image_analysis, filter_image):
         bot, top, left, right = self.check_btlr_coors_in_image([bot, top, left, right], F_shape)
 
         print ("Found crop coors", bot, top, left, right)
-        self.crop_to_FFT_peak([bot, top, left, right])
+        self.crop_to_FFT_peak([bot, top, left, right], 
+                        plot_crop_window_and_peak = plotting_cropping,
+                        plot_fft_space = plot_fft_space
+                        )
         
         return bot, top, left, right 
             

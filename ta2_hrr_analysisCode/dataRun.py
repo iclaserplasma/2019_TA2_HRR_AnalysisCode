@@ -235,7 +235,7 @@ class dataRun:
 								filePathDict[burstStr],eSpecCalib
 								)
 			
-			analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis')
+			analysisSavePath = os.path.join(analysisPath,burstStr,'{}_Analysis'.format(diag))
 			self.saveData(analysisSavePath,analysedData)
 
 			self.logger.info('Performed {} Analysis for '.format(Diag) + burstStr)
@@ -275,10 +275,6 @@ class dataRun:
 		diag = 'SPIDER'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
-		# if not pathExists:
-		# 	print ("Making folder: ", analysisPath)
-		# 	os.makedirs(analysisPath)
-		# print (analysisPath)
 
 		for burstStr in filePathDict.keys():	
 			for filePath in filePathDict[burstStr]:	
