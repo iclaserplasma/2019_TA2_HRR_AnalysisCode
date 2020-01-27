@@ -314,8 +314,10 @@ class dataRun:
 			for filePath in filePathDict[burstStr]:	
 				analysedData = PreCompNFAnalysis.analyseNFImage(filePath,NFCalib)
 				avgEnergy = avgEnergy + analysedData[0]
+
 				# Save the data
-				filename = filePath.split('\\')[-1]
+				l = Path(filePath)		# Splitting the filepath in all operating systems, '\\' and '/'
+				filename = l.parts[-1]				
 				filename = filename[0:-5] + '_Analysis'
 
 				analysisSavePath = os.path.join(analysisPath,burstStr,filename)
@@ -512,13 +514,16 @@ class dataRun:
 		runDate = self.runDate
 		runName = self.runName
 
+		# dateRunString = Path(runDate, runName)
+		# print ("dateRunString 1 ", dateRunString)
 		dateRunString = runDate + '\\' + runName
+		# print ("dateRunString 2 ", dateRunString)
 
 		# Now open the csv file and find the row in which the first column entry matches the dateRunString
-		calibrationFolder = self.calibrationFolder
-		calibrationPath = os.path.join(calibrationFolder,'CalibrationPaths.csv')
+		calibrationFolder = Path(self.calibrationFolder)
+		calibrationPath = calibrationFolder / 'CalibrationPaths.csv'
 		csv_file = csv.reader(open(calibrationPath, "r"), delimiter=",")
-
+	
 		cntr = 0
 		for row in csv_file:
 			if cntr == 0:
@@ -536,13 +541,23 @@ class dataRun:
 			cntr = cntr + 1
 			
 		calibrationFilePath = row[cntr]
+		fileNameComponents = calibrationFilePath.split("\\")
 
+		print("The cal file path from CSV", calibrationFilePath)
+		print("The components of the calibration file path", fileNameComponents)
+		# Make the file path with pathlib, all OS system compatibility
+		calibrationFilePath = Path(fileNameComponents[0])
+		if len(fileNameComponents) > 1:
+			for p in fileNameComponents[1:]:
+				calibrationFilePath = calibrationFilePath / p
+		
 		# Now Load in the data 
+		calibrationFilePath = Path(calibrationFolder, calibrationFilePath)
 		try:
-			calibData = np.load(os.path.join(calibrationFolder,calibrationFilePath),allow_pickle=True)
+			calibData = np.load(calibrationFilePath,allow_pickle=True)
 		except:
 			print('Info Recieved')
-			print(os.path.join(calibrationFolder,calibrationFilePath))
+			print(calibrationFilePath)
 			raise Exception('COULD NOT LOAD CALIBRATION FILE, PLEASE CHECK IT EXISTS AND THE PATH IN calibrationPaths.csv IS CORRECT')
 
 
