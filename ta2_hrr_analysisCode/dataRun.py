@@ -530,33 +530,41 @@ class dataRun:
 		runDate = self.runDate
 		runName = self.runName
 
-		# dateRunString = Path(runDate, runName)
-		# print ("dateRunString 1 ", dateRunString)
+		
 		dateRunString = runDate + '\\' + runName
-		# print ("dateRunString 2 ", dateRunString)
+		print ("dateRunString to search for: ", dateRunString)
 
 		# Now open the csv file and find the row in which the first column entry matches the dateRunString
 		calibrationFolder = Path(self.calibrationFolder)
 		calibrationPath = calibrationFolder / 'CalibrationPaths.csv'
-		csv_file = csv.reader(open(calibrationPath, "r"), delimiter=",")
-	
-		cntr = 0
-		for row in csv_file:
-			if cntr == 0:
-				# This row contains the list of diagnostics
-				diagList = row
-			cntr = 1
-			dateRunStringTest = row[0]
-			if dateRunStringTest == dateRunString:
-				break
+		''' CIDU
+		The code using the csv reader has been failing.
+		Trying using pandas
+		'''
+		import pandas as pd
 
-		cntr = 0
-		for tmpDiag in diagList:
-			if diag == tmpDiag:
-				break
-			cntr = cntr + 1
-			
-		calibrationFilePath = row[cntr]
+		def db_index(db, dateRunString, diag):
+		    # Located the region in the database that corresponds to the correct run and diagnostic
+		    runCalFiles = db[db[' '] == dateRunString]
+		    keys = db.keys().tolist()
+		#     print (runCalFiles)
+			# Find the index of the run
+		    inds = db.index[db[' '] == dateRunString].tolist()[0]
+		    for i, k in enumerate(keys):
+		    	# Find the index of the diag (column)
+		        if k == diag:
+		            keyIndex = i
+			# print ("Database Index")
+			# print(inds, keyIndex)		            
+		    return inds, keyIndex
+
+		db = pd.read_csv(calibrationPath)
+		inds, keyIndex = db_index(db, dateRunString, diag)
+		
+		calibrationFilePath = str(db.iloc[inds, keyIndex])
+		print ('The file path')
+		print (calibrationFilePath)
+		
 		fileNameComponents = calibrationFilePath.split("\\")
 
 		print("The cal file path from CSV", calibrationFilePath)
