@@ -544,53 +544,26 @@ class dataRun:
 		import pandas as pd
 
 		def db_index(db, dateRunString, diag):
-		    # Located the region in the database that needs to be updated
+		    # Located the region in the database that corresponds to the correct run and diagnostic
 		    runCalFiles = db[db[' '] == dateRunString]
 		    keys = db.keys().tolist()
 		#     print (runCalFiles)
+			# Find the index of the run
 		    inds = db.index[db[' '] == dateRunString].tolist()[0]
 		    for i, k in enumerate(keys):
+		    	# Find the index of the diag (column)
 		        if k == diag:
 		            keyIndex = i
-		            
+			# print ("Database Index")
+			# print(inds, keyIndex)		            
 		    return inds, keyIndex
 
 		db = pd.read_csv(calibrationPath)
 		inds, keyIndex = db_index(db, dateRunString, diag)
-
-		print ("Database Index")
-		print(inds, keyIndex)
-		print ('The file path?? ', db.iloc[inds, keyIndex])
+		
 		calibrationFilePath = str(db.iloc[inds, keyIndex])
+		print ('The file path')
 		print (calibrationFilePath)
-
-		''' old code from here '''
-		# csv_file = csv.reader(open(calibrationPath, "r"), delimiter=",")
-	
-		# print("Starting loop")
-		# cntr = 0
-		# for row in csv_file:
-		# 	if cntr == 0:
-		# 		# This row contains the list of diagnostics
-		# 		diagList = row
-		# 		print ("Diagnostics", diagList)
-		# 	cntr = 1
-		# 	dateRunStringTest = row[2]
-		# 	if dateRunStringTest == dateRunString:
-		# 		print(dateRunStringTest)
-		# 		print("Found the run we are looking for")
-		# 		print(dateRunStringTest, dateRunString, row)
-		# 		break
-
-		# cntr = 0
-		# for tmpDiag in diagList:
-		# 	if diag == tmpDiag:
-		# 		break
-		# 	cntr = cntr + 1
-			
-		# print (row, row[cntr])
-		# calibrationFilePath = row[cntr]
-
 		
 		fileNameComponents = calibrationFilePath.split("\\")
 
