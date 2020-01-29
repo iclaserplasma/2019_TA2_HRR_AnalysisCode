@@ -5,6 +5,9 @@ from scipy.signal import medfilt
 from sqlDatabase import connectToSQL
 import logging
 import csv 
+# Works with file paths on all operating systems
+from pathlib import Path
+
 try:
 	import cPickle as pickle
 except ModuleNotFoundError:
@@ -17,6 +20,9 @@ import HASOAnalysis
 import ESpecAnalysis
 import PreCompNFAnalysis
 import XRayAnalysis 
+
+import probe_density_extraction 
+
 
 # HELPER FUNCTIONS - COULD BE PLACED ELSEWHERE?
 def getSortedFolderItems(itemPath,key):
@@ -215,10 +221,10 @@ class dataRun:
 		if os.path.exists(analysisPath) is not True:
 			os.makedirs(analysisPath)
 			if self.verbose:
-				print('\n\nGeneral Analysis folder has been created\n')
+				print('\n\nGeneral Analysis folder has been created\n{}\n'.format(analysisPath))
 		else:
 			if self.verbose:
-				print('\n\nGeneral Analysis folder already exists\n')
+				print('\n\nGeneral Analysis folder already exists\n{}\n'.format(analysisPath))
 		return(analysisPath)
 
 
@@ -254,10 +260,28 @@ class dataRun:
 	# -----										DIAGNOSTIC FUNCTION CALLS 											-----
 	# -------------------------------------------------------------------------------------------------------------------
 
+	# PROBE ANALYSIS
+	def performProbeDensityAnalysis(self, ):
+		diag = 'Probe_Interferometry'
+		print ("In ", diag)
 
+		filePathDict = self.createRunPathLists(diag)
+		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
+		print (analysisPath, pathExists)
+		
+		probeCalib = self.loadCalibrationData(diag)
+		for burstStr in filePathDict.keys():		
+			analysedData = probe_density_extraction.extract_plasma_density(
+								filePathDict[burstStr],eSpecCalib
+								)
+			
+			analysisSavePath = os.path.join(analysisPath,burstStr,'{}_Analysis'.format(diag))
+			self.saveData(analysisSavePath,analysedData)
+
+			self.logger.info('Performed {} Analysis for '.format(Diag) + burstStr)
+			print ('Analysed {} for '.format(Diag) + burstStr)		
 
 	# ELECTRON ANALYSIS 
-
 	def performESpecAnalysis(self,useCalibration=True,overwriteData=False):
 		# Load the espec images for the run and analyse
 		# if it exists get it, if not, run initESpecAnalysis and update log
@@ -291,15 +315,18 @@ class dataRun:
 		diag = 'SPIDER'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
+
 		for burstStr in filePathDict.keys():	
 			for filePath in filePathDict[burstStr]:	
 				analysedData = SPIDERAnalysis.analyseSPIDERData(filePath)
 				
 				# Save the data
-				filename = filePath.split('\\')[-1]
+				l = Path(filePath)		# Splitting the filepath in all operating systems, '\\' and '/'
+				filename = l.parts[-1]
 				filename = filename[0:-4] + '_Analysis'
 
 				analysisSavePath = os.path.join(analysisPath,burstStr,filename)
+				print (analysisPath, analysisSavePath)
 				self.saveData(analysisSavePath,analysedData)
 			self.logThatShit('Performed SPIDER Analysis for ' + burstStr)
 			print('Analysed SPIDER '+ burstStr)
@@ -343,8 +370,10 @@ class dataRun:
 			for filePath in filePathDict[burstStr]:	
 				analysedData = PreCompNFAnalysis.analyseNFImage(filePath,NFCalib)
 				avgEnergy = avgEnergy + analysedData[0]
+
 				# Save the data
-				filename = filePath.split('\\')[-1]
+				l = Path(filePath)		# Splitting the filepath in all operating systems, '\\' and '/'
+				filename = l.parts[-1]				
 				filename = filename[0:-5] + '_Analysis'
 
 				analysisSavePath = os.path.join(analysisPath,burstStr,filename)
@@ -582,37 +611,58 @@ class dataRun:
 		runDate = self.runDate
 		runName = self.runName
 
+		
 		dateRunString = runDate + '\\' + runName
+		print ("dateRunString to search for: ", dateRunString)
 
 		# Now open the csv file and find the row in which the first column entry matches the dateRunString
-		calibrationFolder = self.calibrationFolder
-		calibrationPath = os.path.join(calibrationFolder,'CalibrationPaths.csv')
-		csv_file = csv.reader(open(calibrationPath, "r"), delimiter=",")
+		calibrationFolder = Path(self.calibrationFolder)
+		calibrationPath = calibrationFolder / 'CalibrationPaths.csv'
+		''' CIDU
+		The code using the csv reader has been failing.
+		Trying using pandas
+		'''
+		import pandas as pd
 
-		cntr = 0
-		for row in csv_file:
-			if cntr == 0:
-				# This row contains the list of diagnostics
-				diagList = row
-			cntr = 1
-			dateRunStringTest = row[0]
-			if dateRunStringTest == dateRunString:
-				break
+		def db_index(db, dateRunString, diag):
+		    # Located the region in the database that corresponds to the correct run and diagnostic
+		    runCalFiles = db[db[' '] == dateRunString]
+		    keys = db.keys().tolist()
+		#     print (runCalFiles)
+			# Find the index of the run
+		    inds = db.index[db[' '] == dateRunString].tolist()[0]
+		    for i, k in enumerate(keys):
+		    	# Find the index of the diag (column)
+		        if k == diag:
+		            keyIndex = i
+			# print ("Database Index")
+			# print(inds, keyIndex)		            
+		    return inds, keyIndex
 
-		cntr = 0
-		for tmpDiag in diagList:
-			if diag == tmpDiag:
-				break
-			cntr = cntr + 1
-			
-		calibrationFilePath = row[cntr]
+		db = pd.read_csv(calibrationPath)
+		inds, keyIndex = db_index(db, dateRunString, diag)
+		
+		calibrationFilePath = str(db.iloc[inds, keyIndex])
+		print ('The file path')
+		print (calibrationFilePath)
+		
+		fileNameComponents = calibrationFilePath.split("\\")
 
+		print("The cal file path from CSV", calibrationFilePath)
+		print("The components of the calibration file path", fileNameComponents)
+		# Make the file path with pathlib, all OS system compatibility
+		calibrationFilePath = Path(fileNameComponents[0])
+		if len(fileNameComponents) > 1:
+			for p in fileNameComponents[1:]:
+				calibrationFilePath = calibrationFilePath / p
+		
 		# Now Load in the data 
+		calibrationFilePath = Path(calibrationFolder, calibrationFilePath)
 		try:
-			calibData = np.load(os.path.join(calibrationFolder,calibrationFilePath),allow_pickle=True)
+			calibData = np.load(calibrationFilePath,allow_pickle=True)
 		except:
 			print('Info Recieved')
-			print(os.path.join(calibrationFolder,calibrationFilePath))
+			print(calibrationFilePath)
 			raise Exception('COULD NOT LOAD CALIBRATION FILE, PLEASE CHECK IT EXISTS AND THE PATH IN calibrationPaths.csv IS CORRECT')
 
 
