@@ -21,8 +21,10 @@ import ESpecAnalysis
 import PreCompNFAnalysis
 import XRayAnalysis 
 
-import probe_density_extraction 
-
+try:
+	import probe_density_extraction 
+except:
+	print('Cannot import probe_density_extraction')
 
 # HELPER FUNCTIONS - COULD BE PLACED ELSEWHERE?
 def getSortedFolderItems(itemPath,key):
@@ -386,7 +388,7 @@ class dataRun:
 
 
 	# X-Ray Anlaysis
-	def performXRayAnalysis(self):
+	def performXRayAnalysis(self,justGetCounts=False):
 		diag = 'XRay'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -394,18 +396,28 @@ class dataRun:
 		xrayCalib = self.loadCalibrationData(diag)
 
 		for burstStr in filePathDict.keys():
-			#for filePath in filePathDict[burstStr]:	
-			#	analysedData = XRayAnalysis.XRayEcrit(filePath,xrayCalib)
-			analysedData = XRayAnalysis.XRayEcrit(filePathDict[burstStr],xrayCalib)
-			#	# Save the data
-			#	filename = filePath.split('\\')[-1]
-			#	filename = filename[0:-4] + '_Analysis'
-			analysisSavePath = os.path.join(analysisPath,burstStr,'XRayAnalysis')
-			#	analysisSavePath = os.path.join(analysisPath,burstStr,filename)
-			#	self.saveData(analysisSavePath,analysedData)
-			self.saveData(analysisSavePath,analysedData)
-			self.logThatShit('Performed XRay Analysis for ' + burstStr)
-			print('Performed XRay Analysis for ' + burstStr )
+			if justGetCounts:
+				# Here we're going to avoid all actual x-ray code and just sum the image counts
+				# Not even using a background. This is to mimic what happened during optimization
+				imgCounts  = 0
+				cntr = 0
+				for filePath in filePathDict[burstStr]:	
+					imgCounts += np.sum(plt.imread(filePath).astype(float))
+					cntr +=1
+				analysedData = imgCounts/cntr
+				analysisSavePath = os.path.join(analysisPath,burstStr,'XRayImgCounts')
+				self.saveData(analysisSavePath,analysedData)
+				self.logThatShit('Averaged Counts for XRay images for ' + burstStr)
+				print('Averaged Counts for XRay images for ' + burstStr )
+				
+			else:
+				analysedData = XRayAnalysis.XRayEcrit(filePathDict[burstStr],xrayCalib)
+				analysisSavePath = os.path.join(analysisPath,burstStr,'XRayAnalysis')
+				self.saveData(analysisSavePath,analysedData)
+				self.logThatShit('Performed XRay Analysis for ' + burstStr)
+				print('Performed XRay Analysis for ' + burstStr )
+			
+		
 		return 0	
 
 	# -------------------------------------------------------------------------------------------------------------------
