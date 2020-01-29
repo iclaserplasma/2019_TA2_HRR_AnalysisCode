@@ -9,12 +9,14 @@ try:
 	import cPickle as pickle
 except ModuleNotFoundError:
 	import pickle
+from datetime import datetime
 
 # IMPORT DIAGNOSTIC CODES
 import SPIDERAnalysis
 import HASOAnalysis
 import ESpecAnalysis
 import PreCompNFAnalysis
+import XRayAnalysis 
 
 # HELPER FUNCTIONS - COULD BE PLACED ELSEWHERE?
 def getSortedFolderItems(itemPath,key):
@@ -42,6 +44,7 @@ def loadRunObject(path):
 	run = pickle.load(f)
 	return run
 
+
 class dataRun:
 
 
@@ -50,35 +53,72 @@ class dataRun:
 	# -------------------------------------------------------------------------------------------------------------------
 
 
-	def __init__(self, baseDataFolder, baseAnalysisFolder, calibrationFolder, runDate, runName,verbose=0):
+	def __init__(self, baseDataFolder, baseAnalysisFolder, calibrationFolder, runDate, runName,verbose=0,overwrite=False):
 		# baseDataFolder is the location of the Mirage Data folder
 		# runDate is a string
 		# runName is a string
 		
-		# Options	
-		self.verbose = verbose
+		# First Check if the run Object already exists. If it does, then just load it in.
 
-		self.baseDataFolder 	= baseDataFolder
-		self.baseAnalysisFolder	= baseAnalysisFolder
-		self.calibrationFolder  = calibrationFolder
+		runObjectPath = os.path.join(baseAnalysisFolder , 'General' , runDate , runName , 'runObject.pkl' )
+		doesRunObjectExist = os.path.isfile(runObjectPath)
 
-		# Data Information
-		self.runDate 			= runDate
-		self.runName 			= runName
-		loggingAnalysisFolder 	= self.createAnalysisFolder()
-		loggerFile 				= os.path.join(loggingAnalysisFolder,'analysisInfo.log')
-		logging.basicConfig(filename=loggerFile, filemode='w', format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S',level=logging.INFO)
-		self.logger 			= logging.getLogger('logFile')
-		self.diagList 			= self.findAvailableDiagnostics(runDate,runName)
-		datStyle, datShots, diagShotDict = self.runsOrBursts(runDate,runName,self.diagList)
-		self.datStyle 			= datStyle
-		self.datShots			= datShots
-		self.diagShotDict 		= diagShotDict
-		self.analysisPath 		= self.createAnalysisFolder()
+		if doesRunObjectExist and not overwrite:
+			oldRun = pickle.load( open( runObjectPath, "rb" ) )
+			print('Run Object already Exists. Loading it in. If you would prefer to start from scratch, use the argument overwrite==True')
+			self.verbose = verbose
+
+			self.baseDataFolder 	= oldRun.baseDataFolder
+			self.baseAnalysisFolder	= oldRun.baseAnalysisFolder
+			self.calibrationFolder  = oldRun.calibrationFolder
+
+			# Data Information
+			self.runDate 			= oldRun.runDate
+			self.runName 			= oldRun.runName
+			loggingAnalysisFolder 	= self.createAnalysisFolder()
+			self.loggerFile 		= oldRun.loggerFile
+			self.logThatShit('Analysis Continued\n')
+			
+
+			self.diagList 			= oldRun.diagList
+			self.datStyle 			= oldRun.datStyle
+			self.datShots			= oldRun.datShots
+			self.diagShotDict 		= oldRun.diagShotDict
+			self.analysisPath 		= self.createAnalysisFolder()
+		else:
+
+			# Options	
+			self.verbose = verbose
+
+			self.baseDataFolder 	= baseDataFolder
+			self.baseAnalysisFolder	= baseAnalysisFolder
+			self.calibrationFolder  = calibrationFolder
+
+			# Data Information
+			self.runDate 			= runDate
+			self.runName 			= runName
+
+			loggingAnalysisFolder 	= self.createAnalysisFolder()
+			self.loggerFile 		= os.path.join(loggingAnalysisFolder,'analysisInfo.log')
+			
+			# Open the first log and add to it
+			loggerFile = self.loggerFile
+			f = open(loggerFile, "w")
+			now = datetime. now()
+			current_time = now. strftime('%d/%m/%Y %H:%M:%S')	
+			f.write('\n' + current_time + ' - ' + 'Run Analysis Initiated\n')
+			f.close()
+			
+			self.diagList 			= self.findAvailableDiagnostics(runDate,runName)
+			datStyle, datShots, diagShotDict = self.runsOrBursts(runDate,runName,self.diagList)
+			self.datStyle 			= datStyle
+			self.datShots			= datShots
+			self.diagShotDict 		= diagShotDict
+			self.analysisPath 		= self.createAnalysisFolder()
 
 
-		# Collect SQL Data
-		self.collectSQLData()
+			# Collect SQL Data
+			self.collectSQLData()
 
 
 
@@ -97,9 +137,9 @@ class dataRun:
 		for diag in unavailableDiags:
 			diagList.remove(diag)
 		
-		self.logger.info('\n\nList of Available Diagnostics for ' + os.path.join(runDate,runName) + '\n')
+		self.logThatShit('\n\nList of Available Diagnostics for ' + os.path.join(runDate,runName) + '\n')
 		for element in diagList:
-				self.logger.info(element)
+				self.logThatShit(element)
 		if self.verbose:
 			print('\n\nList of Available Diagnostics for ' + os.path.join(runDate,runName) + '\n')
 			for element in diagList:
@@ -241,7 +281,7 @@ class dataRun:
 				# Save the data
 				analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_NoCalibration')
 				self.saveData(analysisSavePath,analysedData)
-			self.logger.info('Performed HighESpec Analysis for ' + burstStr)
+			self.logThatShit('Performed HighESpec Analysis for ' + burstStr)
 			print('Analysed ESpec Spectrum, Charge, totalEnergy, cutoffEnergy95 for Burst '+ burstStr)
 
 
@@ -261,7 +301,7 @@ class dataRun:
 
 				analysisSavePath = os.path.join(analysisPath,burstStr,filename)
 				self.saveData(analysisSavePath,analysedData)
-			self.logger.info('Performed SPIDER Analysis for ' + burstStr)
+			self.logThatShit('Performed SPIDER Analysis for ' + burstStr)
 			print('Analysed SPIDER '+ burstStr)
 		return 0
 
@@ -286,7 +326,7 @@ class dataRun:
 				# Save the data
 				analysisSavePath = os.path.join(analysisPath,burstStr,'waveFrontOnLeakage')
 				self.saveData(analysisSavePath,analysedData)
-			self.logger.info('Performed HASO Analysis for ' + burstStr)
+			self.logThatShit('Performed HASO Analysis for ' + burstStr)
 			print('Analysed HASO '+ burstStr)
 
 
@@ -311,8 +351,32 @@ class dataRun:
 				self.saveData(analysisSavePath,analysedData)
 			avgEnergy = avgEnergy/len(filePathDict[burstStr])
 			energyStr = '%.3f J' %(avgEnergy)
-			self.logger.info('Performed NF Analysis for ' + burstStr +'. Avg Pulse Energy On Target = ' +  energyStr)
+			self.logThatShit('Performed NF Analysis for ' + burstStr +'. Avg Pulse Energy On Target = ' +  energyStr)
 			print('Performed NF Analysis for ' + burstStr +'. Avg Pulse Energy On Target = ' +  energyStr)
+		return 0	
+
+
+	# X-Ray Anlaysis
+	def performXRayAnalysis(self):
+		diag = 'XRay'
+		filePathDict = self.createRunPathLists(diag)
+		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
+
+		xrayCalib = self.loadCalibrationData(diag)
+
+		for burstStr in filePathDict.keys():
+			#for filePath in filePathDict[burstStr]:	
+			#	analysedData = XRayAnalysis.XRayEcrit(filePath,xrayCalib)
+			analysedData = XRayAnalysis.XRayEcrit(filePathDict[burstStr],xrayCalib)
+			#	# Save the data
+			#	filename = filePath.split('\\')[-1]
+			#	filename = filename[0:-4] + '_Analysis'
+			analysisSavePath = os.path.join(analysisPath,burstStr,'XRayAnalysis')
+			#	analysisSavePath = os.path.join(analysisPath,burstStr,filename)
+			#	self.saveData(analysisSavePath,analysedData)
+			self.saveData(analysisSavePath,analysedData)
+			self.logThatShit('Performed XRay Analysis for ' + burstStr)
+			print('Performed XRay Analysis for ' + burstStr )
 		return 0	
 
 	# -------------------------------------------------------------------------------------------------------------------
@@ -474,6 +538,22 @@ class dataRun:
 
 	#	np.save(fullFilePath, data)
 
+	def logThatShit(self, string2Log):
+		'''Need to open logger file, append the string and close it'''
+		#logging.basicConfig(filename=self.loggerFile, filemode='a', format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S',level=logging.INFO)
+		#logger.info(string2Log)
+		##logger = logging.getLogger(self.loggerFile )
+		#logging.shutdown()
+		loggerFile = self.loggerFile
+		f = open(loggerFile, "a")
+		now = datetime. now()
+		current_time = now. strftime('%d/%m/%Y %H:%M:%S')	
+		f.write('\n' + current_time + ' - ' + string2Log)
+		f.close()
+
+
+		return 0
+
 	def saveData(self,path,data):
 		# Check if the folder exists, bearing in mind that we might have an extra
 		dirName = os.path.dirname(path)
@@ -485,6 +565,7 @@ class dataRun:
 		baseAnalysisFolder = self.baseAnalysisFolder
 		runDate = self.runDate
 		runName = self.runName
+		self.logThatShit('Saving Run Object\n\n')
 		outputFile = open(os.path.join(baseAnalysisFolder,'General',runDate,runName,'runObject.pkl'), 'wb')
 		pickle.dump(self,outputFile,protocol=0)
 		outputFile.close()
