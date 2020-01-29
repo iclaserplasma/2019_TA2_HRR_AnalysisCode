@@ -20,6 +20,7 @@ import pkg_resources
 import re
 
 
+
 def XRayEcrit(FileList, calibrationTuple):
     (ImageTransformationTuple, CameraTuple, TransmissionTuple) = calibrationTuple
     (filterNames, ecrit, Y) = TransmissionTuple
