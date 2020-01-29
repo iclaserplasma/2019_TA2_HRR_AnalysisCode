@@ -20,6 +20,7 @@ import pkg_resources
 import re
 
 
+
 def XRayEcrit(FileList, calibrationTuple):
     (ImageTransformationTuple, CameraTuple, TransmissionTuple) = calibrationTuple
     (filterNames, ecrit, Y) = TransmissionTuple
@@ -90,16 +91,16 @@ def determineEcrit(AverageValues, StdValues, ecrit, Y):
     BestId = np.argmin(Chi2)
     bestEcrit = ecrit[BestId]
     # uncertainty:
-    DeltaF = (Y[BestId+1] - Y[BestId-1]) / (ecrit[BestId+1] - ecrit[BestId+1])
-    alphaInverted = 1/(DeltaF**2)
+    Chi2 = np.sum((AverageValues - Y)**2, 1)/N 
+    DeltaF = (Y[BestId+1] - Y[BestId-1]) / (ecrit[BestId+1] - ecrit[BestId-1])
+    alphaInverted = 1/np.sum(DeltaF * DeltaF.T)
     ecritStd = np.sqrt(Chi2[BestId] * alphaInverted)
-    # now this "wrong" critical energy is not the whole story, since
     return bestEcrit, ecritStd
 
 
 def prepDim(vec, e):
     vec = np.array(vec)
-    vec = ml.repmate(vec, len(e), 1)
+    vec = ml.repmat(vec, len(e), 1)
     return vec
 
 
@@ -383,7 +384,7 @@ def mainCalibrationFunction(runName, basePath='Z:\\', calPath='Y:\\ProcessedCali
         F3 = 'Mg'
         P3 = (np.array([[157, 213], [190, 203], [160, 102], [129, 114]]),
             np.array([[156, 87], [124, 97], [95, 0], [130, 0]]))
-        F4 = 'Al(0.95)'
+        F4 = 'Al(0.95)Mg(0.05)'
         P4 = (np.array([[141, 216], [111, 223], [77, 104], [106, 94]]),
             np.array([[207, 93], [176, 103], [146, 0], [179, 0]]))
         #  Darkest area:
@@ -408,8 +409,10 @@ def mainCalibrationFunction(runName, basePath='Z:\\', calPath='Y:\\ProcessedCali
                     # check if this works... Not sure, because I overwrite it again...
                     P.append(getMaskFromPts(Pold[cc], idx, idy, []))
                 cc += 1
-
-        PixelSize = 13e-6
+        if sizex > 1000:
+            PixelSize = 13e-6
+        else:
+            PixelSize = 13e-6 * 4
         GasCell2Camera = 1.2
         RepRate = 1
         Alpha = 274

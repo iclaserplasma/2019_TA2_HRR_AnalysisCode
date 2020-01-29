@@ -8,6 +8,7 @@ v0.1 - the code was constructed mainly by the code produce during the experiment
 """
 import os
 import scipy.io
+from scipy.interpolate import interp2d
 import numpy as np
 import cv2
 import csv
@@ -129,7 +130,7 @@ def analyseImage(rawImage, calibrationTuple):
     BackgroundStd_SigmaLevel = np.sum(BackgroundNoise, axis=0) * SignificanceLevel
     cutoffEnergy95 = determine95percentCharge(Energy, Spectrum, BackgroundStd_SigmaLevel)
     totalEnergy = determineTotalEnergy(Energy, Spectrum, BackgroundStd_SigmaLevel)
-    return Spectrum, Charge, totalEnergy, cutoffEnergy95
+    return WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95
 
 
 def imageTransformation(image, calibrationTuple):
