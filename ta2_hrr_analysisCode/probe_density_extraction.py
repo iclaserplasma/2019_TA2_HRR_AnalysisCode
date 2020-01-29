@@ -7,7 +7,7 @@
     /    |   /   |  |\ | ||_
    /____ |__/\ . |  | \|_|\_|
    __________________________ .
-Created on 27/01/2020, 17:12:51
+Created on 29/01/2020, 18:12:16
 @author: chrisunderwood
 """
 import numpy as np
@@ -270,8 +270,10 @@ class probe_image_analysis():
         return arr_Rot
 
 class phaseShift(probe_image_analysis, filter_image):   
-    def __init__(self):
+    def __init__(self, power = 6):
         print ("Creating phaseShift class")
+        self.gausPower = 2*power
+
         
     def plot_raw_input(self):
         """ Plot the raw image with a colorbar
@@ -280,7 +282,9 @@ class phaseShift(probe_image_analysis, filter_image):
             f, ax = plt.subplots(ncols = 2,sharex = True, sharey = True)
             plt.suptitle("Input Data")
             self.plot_data(self.im, show=False, ax = ax[0])
-            self.plot_data(self.ref, show=False, ax = ax[1])            
+            self.plot_data(self.ref, show=False, ax = ax[1])   
+            ax[0].set_xlim([0, self.im.shape[1]] )
+            ax[0].set_ylim([ self.im.shape[0], 0] )
             # im1 = ax[0].pcolormesh(self.im , cmap = plt.cm.seismic)
             # im2 = ax[1].pcolormesh(self.ref, cmap = plt.cm.seismic)
             # plt.colorbar(im1, ax = ax[0])
@@ -291,15 +295,15 @@ class phaseShift(probe_image_analysis, filter_image):
         else:
             self.plot_data(self.im , cmap = plt.cm.seismic)
             
-    def draw_outline(self, bot, top, left, right, ax = None):
+    def draw_outline(self, bot, top, left, right, ax = None, color = "black"):
         ''' Draw lines to show where the cropping is happening.
         '''
         if ax == None:
             ax = plt.gca()
         for y in [top, bot]:
-            ax.hlines(y, left, right, color = "black")
+            ax.hlines(y, left, right, color = color)
         for x in [left, right]:
-            ax.vlines(x, top, bot, color = "black" )              
+            ax.vlines(x, top, bot, color = color )              
 
     
     def load_arrIntoClass(self, im, ref = None, plotting = False):
@@ -310,6 +314,13 @@ class phaseShift(probe_image_analysis, filter_image):
         if ref is not None:
             self.ref = ref
             self.refExists = True
+            # Check the size of the inputted reference
+            if self.ref.shape == self.im.shape:
+                print ("Reference and Image same size")
+                self.refSameSize = True
+            else:
+                print ("reference is different to image, assume that the fringes are centered in this image")
+                self.refSameSize = False            
         else:
             self.refExists = False
 
@@ -323,8 +334,26 @@ class phaseShift(probe_image_analysis, filter_image):
         self.im = self.loadData(loadPath + imFile)
         self.imShape = np.shape(self.im)
         if refFile is not None:
-            self.ref = self.loadData(loadPath + refFile)
             self.refExists = True
+            if type(refFile) == str:
+                print ("Loading reference filePath ", refFile)
+                self.ref = self.loadData(loadPath + refFile)
+                print ("Assuming that the reference is an image of the same size")
+                self.refSameSize = True
+                
+            elif type(refFile) == np.ndarray:
+                print ("reference is array, ")                        
+                self.ref = refFile
+                
+                # Check the size of the inputted reference
+                if self.ref.shape == self.im.shape:
+                    print ("Reference and Image same size")
+                    self.refSameSize = True
+                else:
+                    print ("reference is different to image, assume that the fringes are centered in this image")
+                    self.refSameSize = False
+            else:
+                assert False, "ERROR reading referecence, neither an array or filepath"
         else:
             self.refExists = False
         if plotting:
@@ -337,6 +366,21 @@ class phaseShift(probe_image_analysis, filter_image):
         self.im_PlasmaChannel = np.pad(self.im_PlasmaChannel, padSize, 'constant')    
         if self.refExists:
             self.ref_PlasmaChannel = np.pad(self.ref_PlasmaChannel, padSize, 'constant')    
+        
+    def cropCentreOfRef_DiffShape(self, channelPadding, xpad , ypad):
+        print("Cropping to the centre of the refenece image, with the same size as the crop")
+        bot, top , left, right = self.centerCropRegionOnImage(self.pc_xsize, self.pc_ysize, self.ref.shape )
+        print (bot, top , left, right)
+
+        sgCrop = self.createGaussianCroppingWindow(self.ref, [bot, top , left, right], self.gausPower)
+        self.ref_PlasmaChannel = self.ref * sgCrop
+        b_pc, t_pc, l_pc, r_pc = bot - self.paddingY, top + self.paddingY, left - self.paddingX, right + self.paddingX
+        old = [b_pc, t_pc, l_pc, r_pc]
+        b_pc, t_pc, l_pc, r_pc = self.check_btlr_coors_in_image([b_pc, t_pc, l_pc, r_pc], self.imShape)
+        assert [b_pc, t_pc, l_pc, r_pc] == old, 'New image is outside of crop'
+        self.ref_PlasmaChannel = self.ref_PlasmaChannel[b_pc:t_pc, l_pc:r_pc]
+
+        
         
     
     def cropToPlasmaChannel(self, pc_crop_coors, plotting = False, 
@@ -352,41 +396,61 @@ class phaseShift(probe_image_analysis, filter_image):
         bot, top, left, right = self.check_btlr_coors_in_image(pc_crop_coors, self.imShape)
 
         # # Find the range and centres of the box marking the PC
-        xr = (right-left)
-        yr = (top-bot)
-        self.pc_xsize = xr
-        self.pc_ysize = yr
+        self.pc_xsize = (right-left)
+        self.pc_ysize = (top-bot)
         
         self.paddingX = paddingX
         self.paddingY = paddingY    
         self.padSize = padSize           
-        if plotting:
+        
+        if plotting and self.refExists:
+            # Plot the cropping box on the image
             self.draw_outline(bot, top, left, right)
             self.plot_data(self.im)
-        power = 2*6
-        gaus_cropping = self.createGaussianCroppingWindow(self.im, [bot, top , left, right], power)
+
+        gaus_cropping = self.createGaussianCroppingWindow(self.im, [bot, top , left, right], self.gausPower)
         if False:
             plt.title("Gaussian cropping window")
             self.plot_data(gaus_cropping)
         self.im_PlasmaChannel = self.im * gaus_cropping
+        
         if self.refExists:
-            self.ref_PlasmaChannel = self.ref * gaus_cropping
+            if self.refSameSize:
+                print ("Ref is same size as crop region")
+                self.ref_PlasmaChannel = self.ref * gaus_cropping
+            else:
+                self.cropCentreOfRef_DiffShape(self.padSize, self.paddingX, self.paddingY)
+                plt.title("Smaller reference cropped")
+                self.plot_data(self.ref_PlasmaChannel)
+                print (self.ref_PlasmaChannel.shape)
         else:
             # Use a region where the fringes are unperturbed as the reference
-            self.crop_reference_fringes(self.padSize, self.paddingX, self.paddingY, 
-                                        centreCoorsOfFringeRegion)
-        
-        
-        b_pc, t_pc, l_pc, r_pc = bot - paddingY, top + paddingY, left - paddingX, right + paddingX
+            _, referenceOutline = self.crop_reference_fringes(self.padSize, self.paddingX, self.paddingY, 
+                                        centreCoorsOfFringeRegion, plotting = True)
+            if plotting:
+                self.draw_outline(bot, top, left, right, color = 'black')
+                b, t, l, t = referenceOutline
+                self.draw_outline(b, t, l, t, color = 'red')
+                self.plot_data(self.im)
+                
+        # f, ax = plt.subplots(ncols = 2)
+        # plt.title("Dif between im and ref pc")
+        # ax[0].imshow(self.im_PlasmaChannel)
+        # ax[1].imshow(self.ref_PlasmaChannel)        
+        # plt.show()
+        b_pc, t_pc, l_pc, r_pc = bot - self.paddingY, top + self.paddingY, left - self.paddingX, right + self.paddingX
         b_pc, t_pc, l_pc, r_pc = self.check_btlr_coors_in_image([b_pc, t_pc, l_pc, r_pc], self.imShape)
         
         # Crop to the new region of the image
         self.im_PlasmaChannel = self.im_PlasmaChannel[b_pc:t_pc, l_pc:r_pc]
         if self.refExists:
-            self.ref_PlasmaChannel = self.ref_PlasmaChannel[b_pc:t_pc, l_pc:r_pc]           
+            if self.refSameSize:
+                self.ref_PlasmaChannel = self.ref_PlasmaChannel[b_pc:t_pc, l_pc:r_pc]           
 
         # Pad the image with zeros
         self.zeroPadImages(padSize)
+
+        print (self.im_PlasmaChannel.shape, self.ref_PlasmaChannel.shape)
         
         # The refence has now been created
         self.refExists = True        
@@ -399,6 +463,9 @@ class phaseShift(probe_image_analysis, filter_image):
             plt.axes().set_aspect('equal')
             plt.colorbar()            
             plt.show()       
+
+        assert self.im_PlasmaChannel.shape == self.ref_PlasmaChannel.shape, 'The cropping to size has failed, {} = {}'.format(self.im_PlasmaChannel.shape, self.ref_PlasmaChannel.shape)
+        
             
     def fft_of_plasma(self, plotting = True):
         ''' Do 2D fft '''
@@ -410,9 +477,11 @@ class phaseShift(probe_image_analysis, filter_image):
             self.F_ref_PC = self.wrapImage(self.F_ref_PC)
                     
         if plotting:    
-            plt.pcolormesh( abs(self.F_im_PC), cmap = plt.cm.seismic, norm = mpl.colors.LogNorm())
-            plt.colorbar()
-            plt.title("Im PC FFT")
+            f, ax = plt.subplots(nrows = 2, sharex = True)
+            im = ax[0].pcolormesh( abs(self.F_im_PC), cmap = plt.cm.seismic, norm = mpl.colors.LogNorm())
+            plt.colorbar(im, ax = ax[0])
+            ax[0].set_title("Im PC FFT")
+            ax[1].plot(abs(self.F_im_PC).sum(axis = 0))
             plt.show()
             
     def plot_FT_space(self, bot, top, left, right, peakRelHeight):
@@ -488,21 +557,36 @@ class phaseShift(probe_image_analysis, filter_image):
         """ Create a lineout of the image and find the peaks
         """
         from scipy.signal import find_peaks           
-        x_range = np.arange(self.F_im_PC.shape[0])
+        x_range = np.arange(self.F_im_PC.shape[1])
         xData = abs(self.F_im_PC).sum(axis = 0)
         
-        y_range = np.arange(self.F_im_PC.shape[1])
+        y_range = np.arange(self.F_im_PC.shape[0])
         yData = abs(self.F_im_PC).sum(axis = 1)
         
-        # Locate the peaks
-        xpeaks = find_peaks(xData , height = xData.max() * peakRelHeight)         
-        ypeaks = find_peaks(yData , height = yData.max() * peakRelHeight)  
-        # Take the first and last peak to be the peaks of interest. Tune the variable peakRelHeight
-        # so this is the case
-        if len(xpeaks[0]) > 2:
-            xpeaks = [ [xpeaks[0][0], xpeaks[0][-1]], 
-                      {'peak_heights': [xpeaks[1]['peak_heights'][0], xpeaks[1]['peak_heights'][-1]]} ]
-
+        search = True
+        searchCount = 0
+        while search:
+            # Locate the peaks
+            xpeaks = find_peaks(xData , height = xData.max() * peakRelHeight)         
+            ypeaks = find_peaks(yData , height = yData.max() * peakRelHeight)  
+            # Take the first and last peak to be the peaks of interest. Tune the variable peakRelHeight
+            # so this is the case
+            if len(xpeaks[0]) > 2:
+                xpeaks = [ [xpeaks[0][0], xpeaks[0][-1]], 
+                          {'peak_heights': [xpeaks[1]['peak_heights'][0], xpeaks[1]['peak_heights'][-1]]} ]
+            if len(xpeaks[0]) == 2:
+                print( " the number of peaks found is 2")
+                search = False
+            else:
+                searchCount += 1
+                peakRelHeight -= 0.005
+                print (peakRelHeight)
+                
+            if searchCount > 1e3 or peakRelHeight < 0:
+                break
+            
+        print (xpeaks)
+        assert len(xpeaks[0]) == 2, 'The peaks have not been found {}'.format(xpeaks)
         return x_range, xData, y_range, yData, xpeaks, ypeaks
         
             
@@ -519,12 +603,18 @@ class phaseShift(probe_image_analysis, filter_image):
             plt.figure(figsize = (6, 4))
             plt.title("Finding the peaks in the FFT of the image")
             plt.plot(x_range, xData, label = "x")
+            # plt.plot(xData)
+            
             plt.plot(y_range, yData, label = "y")
+            # plt.plot(yData)
+            
             plt.plot(xpeaks[0], xpeaks[1]['peak_heights'], "x")
             plt.plot(ypeaks[0], ypeaks[1]['peak_heights'], "x")
             plt.legend()
             plt.show()        
 
+        print (xpeaks)
+        
         xrange = xpeaks[0][1] - xpeaks[0][0]
         yrange = F_shape[0]
         
@@ -621,8 +711,10 @@ class phaseShift(probe_image_analysis, filter_image):
         
         bot, top, left, right = self.check_btlr_coors_in_image([bot, top, left, right],
                                      self.imShape)
-        if plotting: 
+        referenceOutline = np.array([bot, top, left, right]) * 1.0
+        if plotting and self.refExists: 
             plt.title("Reference region")
+            print (bot, top, left, right, referenceOutline)
             self.draw_outline(bot, top, left, right)
             self.plot_data(self.im)
             
@@ -630,7 +722,7 @@ class phaseShift(probe_image_analysis, filter_image):
         xr = self.pc_xsize
         yr = self.pc_ysize
         
-        self.refData = self.im * 1.0
+        # self.refData = self.im * 1.0
         sgCrop = self.crop_to_ref([bot, top, left, right]
                 , xr, yr, channelPadding, xpad , ypad)
             
@@ -642,7 +734,8 @@ class phaseShift(probe_image_analysis, filter_image):
             plt.show()        
                 
         print ('Reference Created')
-        return sgCrop        
+        print (bot, top, left, right, referenceOutline)
+        return sgCrop , referenceOutline    
     
             
     def shift_centerofCrop_to_Centre(self, arr, bot, top, left, right):
@@ -659,14 +752,15 @@ class phaseShift(probe_image_analysis, filter_image):
     def crop_to_ref(self, btlr, xr, yr, channelPadding, xpad , ypad):
         ''' Crop the reference image in the same way as the main image.
         '''
+        print ("crop_to_ref:: ", channelPadding, xpad , ypad)
         bot, top, left, right = self.check_btlr_coors_in_image(btlr, self.imShape)
-        centeredReference = self.shift_centerofCrop_to_Centre(self.refData, 
+        centeredReference = self.shift_centerofCrop_to_Centre(self.im, 
                                                         bot, top, left, right)   
         # Shifting the crop region to match the shifting of the center of the image    
-        bot, top, left, right = self.centerCropRegionOnImage(xr, yr)        
+        bot, top, left, right = self.centerCropRegionOnImage(xr, yr, self.imShape)        
         self.rawReference = centeredReference[bot:top, left:right]
    
-        sgCrop = self.createGaussianCroppingWindow(centeredReference, [bot, top, left, right])
+        sgCrop = self.createGaussianCroppingWindow(centeredReference, [bot, top, left, right], self.gausPower)
         
         # croppedImage = centeredPC * (1- sgCrop) # Debugging option, invert the crop
         croppedImage = centeredReference * sgCrop
@@ -674,11 +768,11 @@ class phaseShift(probe_image_analysis, filter_image):
                             bot, top, left, right, channelPadding, xpad , ypad)  
         return sgCrop
 
-    def centerCropRegionOnImage(self, xr, yr):
+    def centerCropRegionOnImage(self, xr, yr, imShape):
         '''Shifting the crop region to match the shifting of the center of the image    
         '''
-        btlr = [self.imShape[0] // 2 - yr //2, self.imShape[0] // 2 + yr //2, 
-                self.imShape[1] // 2 - xr //2, self.imShape[1] // 2 + xr //2]
+        btlr = [imShape[0] // 2 - yr //2, imShape[0] // 2 + yr //2, 
+                imShape[1] // 2 - xr //2, imShape[1] // 2 + xr //2]
         return btlr
     
     def crop_with_padding(self, croppedImage, bot, top, left, right, channelPadding, xpad , ypad):
