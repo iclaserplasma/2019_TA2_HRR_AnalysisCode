@@ -20,11 +20,11 @@ import HASOAnalysis
 import ESpecAnalysis
 import PreCompNFAnalysis
 import XRayAnalysis 
+import probe_density_extraction 
 
-try:
-	import probe_density_extraction 
-except:
-	print('Cannot import probe_density_extraction')
+# try:
+# except:
+# 	print('Cannot import probe_density_extraction')
 
 # HELPER FUNCTIONS - COULD BE PLACED ELSEWHERE?
 def getSortedFolderItems(itemPath,key):
@@ -273,15 +273,15 @@ class dataRun:
 		
 		probeCalib = self.loadCalibrationData(diag)
 		for burstStr in filePathDict.keys():		
-			analysedData = probe_density_extraction.extract_plasma_density(
-								filePathDict[burstStr],eSpecCalib
-								)
-			
 			analysisSavePath = os.path.join(analysisPath,burstStr,'{}_Analysis'.format(diag))
+			analysedData = probe_density_extraction.extract_plasma_density(
+								filePathDict[burstStr],probeCalib, analysisSavePath)
+			
+			
 			self.saveData(analysisSavePath,analysedData)
 
-			self.logger.info('Performed {} Analysis for '.format(Diag) + burstStr)
-			print ('Analysed {} for '.format(Diag) + burstStr)		
+			self.logThatShit('Performed Probe_Interferometry Analysis for ' + burstStr)
+			print('Analysed Probe_Interferometry '+ burstStr)
 
 	# ELECTRON ANALYSIS 
 	def performESpecAnalysis(self,useCalibration=True,overwriteData=False):
