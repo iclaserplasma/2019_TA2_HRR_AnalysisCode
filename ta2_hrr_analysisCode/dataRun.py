@@ -20,11 +20,12 @@ import HASOAnalysis
 import ESpecAnalysis
 import PreCompNFAnalysis
 import XRayAnalysis 
-import probe_density_extraction 
 
-# try:
-# except:
-# 	print('Cannot import probe_density_extraction')
+
+try:
+	import probe_density_extraction 
+except:
+	print('Cannot import probe_density_extraction')
 
 # HELPER FUNCTIONS - COULD BE PLACED ELSEWHERE?
 def getSortedFolderItems(itemPath,key):
