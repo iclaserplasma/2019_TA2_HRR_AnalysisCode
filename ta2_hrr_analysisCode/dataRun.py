@@ -21,6 +21,7 @@ import ESpecAnalysis
 import PreCompNFAnalysis
 import XRayAnalysis 
 
+
 try:
 	import probe_density_extraction 
 except:
@@ -273,15 +274,15 @@ class dataRun:
 		
 		probeCalib = self.loadCalibrationData(diag)
 		for burstStr in filePathDict.keys():		
-			analysedData = probe_density_extraction.extract_plasma_density(
-								filePathDict[burstStr],eSpecCalib
-								)
-			
 			analysisSavePath = os.path.join(analysisPath,burstStr,'{}_Analysis'.format(diag))
+			analysedData = probe_density_extraction.extract_plasma_density(
+								filePathDict[burstStr],probeCalib, analysisSavePath)
+			
+			
 			self.saveData(analysisSavePath,analysedData)
 
-			self.logger.info('Performed {} Analysis for '.format(Diag) + burstStr)
-			print ('Analysed {} for '.format(Diag) + burstStr)		
+			self.logThatShit('Performed Probe_Interferometry Analysis for ' + burstStr)
+			print('Analysed Probe_Interferometry '+ burstStr)
 
 	# ELECTRON ANALYSIS 
 	def performESpecAnalysis(self,useCalibration=True,overwriteData=False):
@@ -657,6 +658,7 @@ class dataRun:
 		print (calibrationFilePath)
 		
 		fileNameComponents = calibrationFilePath.split("\\")
+
 
 		print("The cal file path from CSV", calibrationFilePath)
 		print("The components of the calibration file path", fileNameComponents)
