@@ -394,7 +394,8 @@ class dataRun:
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
 
-		xrayCalib = self.loadCalibrationData(diag)
+		if justGetCounts=False:
+			xrayCalib = self.loadCalibrationData(diag)
 
 		for burstStr in filePathDict.keys():
 			if justGetCounts:
