@@ -9,68 +9,13 @@ import logging
 import SPIDERAnalysis
 import HASOAnalysis
 
-# HELPER FUNCTIONS - COULD BE PLACED ELSEWHERE?
-def getSortedFolderItems(itemPath,key):
-	itemList = os.listdir(itemPath)
-	iList = []
-	iNum = []
-	for s in itemList:
-		if key in s:
-			iList.append(s)
-			iNum.append(int(''.join(filter(str.isdigit, s))))
-	return [x for _,x in sorted(zip(iNum,iList))]
-
-def getShotFilePathDict(runPath):
-	burstList = getSortedFolderItems(runPath,'Burst')
-	filePathDict = {}
-	for b in burstList:
-		bPath = os.path.join(runPath,b)
-		fileList = getSortedFolderItems(bPath,'Shot')
-		filePathDict[b] = [os.path.join(bPath, f) for f in fileList]
-	return filePathDict
-
 
 class dataRun:
+	'''
+	This class provides a structure for systematically analysing large data sets from the 2019 TA2 HRR
+	experiment. 
 
-
-
-	# -------------------------------------------------------------------------------------------------------------------
-	# -----										WHATS IN HERE????		 											-----
-	# -------------------------------------------------------------------------------------------------------------------
-
-	# Housekeeping and admin
-	#	__init__
-	#	findAvailableDiagnostics
-	#	runsOrBursts
-	#	createAnalysisFolder
-	#	collectSQLData
-	#
-	# Diagnostic Function Calls
-	# 	Espec
-	#		performESpecAnalysis
-	#		getESpecCharge
-	#	SPIDER
-	#		getSpectralPhaseOrders
-	#		getTemporalProfile
-	#	
-	# A Selection of Generic Functions
-	#	getDiagDataPath	
-	#	getDiagAnalysisPath
-	#	getImage
-	#	averageImagesInFolder
-	#	averageReferenceImages
-	#	getCounts
-	#	subtractRemainingBg
-	#	createDataBuckets
-	#
-	# Saving and Loading Analysed Data
-	#	saveData
-	#	saveRunObject
-
-
-
-
-
+	'''
 	# -------------------------------------------------------------------------------------------------------------------
 	# -----										HOUSEKEEPING AND ADMIN	 											-----
 	# -------------------------------------------------------------------------------------------------------------------
@@ -167,6 +112,7 @@ class dataRun:
 							numShots = tmpNumShots
 					if tmpNumBursts > numBursts:
 						numBursts = tmpNumBursts
+					self.logger.info('Diag: '+ diag + '(numBursts,numShots) = (%i,%i)' %(tmpNumBursts,tmpNumShots))
 					if self.verbose:
 						print('Diag: '+ diag + '(numBursts,numShots) = (%i,%i)' %(tmpNumBursts,tmpNumShots))
 					diagShotDict[diag] = (tmpNumBursts,tmpNumShots)
@@ -186,6 +132,7 @@ class dataRun:
 					if tmpNumShots > numShots:
 						numShots = tmpNumShots
 					diagShotDict[diag] = tmpNumShots
+					self.logger.info('Diag: '+ diag + 'numShots = %i' %(tmpNumShots))
 					if self.verbose:
 						print('Diag: '+ diag + 'numShots = %i' %(tmpNumShots))
 					
@@ -218,7 +165,7 @@ class dataRun:
 
 
 	def collectSQLData(self):
-		db = connectToSQL(True)
+		db = connectToSQL(False)
 		runName = self.runName
 		runDate = self.runDate
 
@@ -240,6 +187,8 @@ class dataRun:
 		analysisPath,isItReal = self.getDiagAnalysisPath('General')
 		self.saveData(os.path.join(analysisPath,'GasCellPressure'),gasCellPressure)
 		self.saveData(os.path.join(analysisPath,'gasCellLength'),gasCellLength)
+
+		self.logger.info('Logged Gas Cell Pressure and Length from SQL')
 
 
 
@@ -286,7 +235,7 @@ class dataRun:
 		return 0
 
 	# HASO Analysis
-	def performHASOAnalysis(self,calibrationPath=None):
+	def performHASOAnalysis(self,calibrationPath=None,verbose=False):
 		diag = 'HASO'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -296,18 +245,21 @@ class dataRun:
 				# Save the data
 				analysisSavePath = os.path.join(analysisPath,burstStr,'waveFrontOnLeakage')
 				self.saveData(analysisSavePath,analysedData)
+				self.logger.info('Analysed Leakage HASO '+ burstStr)
 			else:
 				analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(filePathDict[burstStr],calibrationPath)
 				# Save the data
 				analysisSavePath = os.path.join(analysisPath,burstStr,'calibratedWavefront')
 				self.saveData(analysisSavePath,analysedData)
-			print('Analysed HASO '+ burstStr)
+				self.logger.info('Analysed Calibrated HASO '+ burstStr)
+			if verbose:
+				print('Analysed HASO '+ burstStr)
 
 
 		
 
 	# -------------------------------------------------------------------------------------------------------------------
-	# -----								A SELECTION OF GENERIC FUNCTIONS											-----
+	# -----								A SELECTION OF GENERIC HELPER FUNCTIONS											-----
 	# -------------------------------------------------------------------------------------------------------------------
 
 
@@ -341,7 +293,7 @@ class dataRun:
 		# Get RelevantPaths
 		# analysisPath, analysisPathExists = self.getDiagAnalysisPath(diag)
 		dataPath = self.getDiagDataPath(diag)
-		filePathDict = getShotFilePathDict(dataPath)
+		filePathDict = self.getShotFilePathDict(dataPath)
 		return filePathDict
 
 	def getImage(self,filePath):
@@ -449,7 +401,25 @@ class dataRun:
 	    
 	    return binCenters,binWidth
 
+	
+	def getSortedFolderItems(self,itemPath,key):
+		itemList = os.listdir(itemPath)
+		iList = []
+		iNum = []
+		for s in itemList:
+			if key in s:
+				iList.append(s)
+				iNum.append(int(''.join(filter(str.isdigit, s))))
+		return [x for _,x in sorted(zip(iNum,iList))]
 
+	def getShotFilePathDict(self,runPath):
+		burstList = self.getSortedFolderItems(runPath,'Burst')
+		filePathDict = {}
+		for b in burstList:
+			bPath = os.path.join(runPath,b)
+			fileList = self.getSortedFolderItems(bPath,'Shot')
+			filePathDict[b] = [os.path.join(bPath, f) for f in fileList]
+		return filePathDict
 
 
 	# -------------------------------------------------------------------------------------------------------------------
@@ -482,7 +452,12 @@ class dataRun:
 		baseAnalysisFolder = self.baseAnalysisFolder
 		runDate = self.runDate
 		runName = self.runName
-		np.save(os.path.join(baseAnalysisFolder,runDate,runName,'runObject'), self)
+		self.logger.info('\nSAVING RUN OBJECT')
+		logging.shutdown()
+		try:
+			np.save(os.path.join(baseAnalysisFolder,'General',runDate,runName,'runObject'), self)
+		except:
+			print('ERROR: PYTHON 3.7 REQUIRED TO USE SAVE FEATURE')
 
 	
 	
