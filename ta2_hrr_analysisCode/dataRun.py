@@ -401,14 +401,13 @@ class dataRun:
 			if justGetCounts:
 				# Here we're going to avoid all actual x-ray code and just sum the image counts
 				# Not even using a background. This is to mimic what happened during optimization
-				imgCounts  = []
 				for filePath in filePathDict[burstStr]:	
-					imgCounts.append(np.sum(plt.imread(filePath).astype(float)))
-				analysedData = (np.mean(imgCounts),np.std(imgCounts))
-				analysisSavePath = os.path.join(analysisPath,burstStr,'XRayImgCounts')
-				self.saveData(analysisSavePath,analysedData)
-				self.logThatShit('Averaged Counts for XRay images for ' + burstStr)
-				print('Averaged Counts for XRay images for ' + burstStr )
+					imgCounts = np.sum(plt.imread(filePath).astype(float))
+					shotName = filePath.split('\\')[-1][:-4]
+					analysisSavePath = os.path.join(analysisPath,burstStr,'XRayImgCounts_'+shotName)
+					self.saveData(analysisSavePath,imgCounts)
+					self.logThatShit('Saved counts for ' + burstStr + ' ' + shotName)
+					print('Saved counts for ' + burstStr + ' ' + shotName )
 				
 			else:
 				analysedData = XRayAnalysis.XRayEcrit(filePathDict[burstStr],xrayCalib)
