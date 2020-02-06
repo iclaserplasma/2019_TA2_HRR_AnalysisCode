@@ -64,7 +64,10 @@ class AugmentedGaussianProcess:
             sigma = self.predict_sample_error(X)
             if self.fit_white_noise:
                 white_noise_level = self.submodel_samples.kernel_.k2.noise_level
-                std = np.sqrt(std**2 - white_noise_level)
+                var =std**2 - white_noise_level
+                var = np.clip(var,0,None) # added bodge to prevent spurious results
+                #std = np.sqrt(std**2 - white_noise_level)
+                std = np.sqrt(var)
             if return_efficiency:
                 efficiency = 1 - self.efficiency_factor*sigma / np.sqrt(sigma**2 + std**2)
                 return mean, std, efficiency

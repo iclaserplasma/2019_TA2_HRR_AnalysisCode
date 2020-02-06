@@ -2,6 +2,26 @@ import zipfile
 import numpy as np
 import os
 
+def analyseSPIDERData(filePath):
+    ''' Function to be called by dataRun.py to correctly extract
+    both the spectral phase orders and the temporal pulse shape
+    
+    When performing SPIDER analysis, we know the device sometimes fails
+    We need to ensure that if we're averaging results from the SPIDER,
+    that we don't include measurements from times that it fails.
+
+    This is quite difficult, so for the moment we will simply save the individual file
+    In future, one way to see if the result is bull is to check if the intensity profile in time
+    is zero at the temporal limits of the diagnostic
+    '''
+    
+    timeProfile = readSPIDER_temporal_profile(filePath)
+
+    specPhaseOrders = getSpecPhaseOrders(filePath)
+
+    return timeProfile, specPhaseOrders
+
+
 def readSPIDER_temporal_profile(path):
     
     z = zipfile.ZipFile(path)
@@ -53,3 +73,4 @@ def polyOrders(filePathList):
                 pOrders.append([np.nan]*3)
             
     return pOrders
+

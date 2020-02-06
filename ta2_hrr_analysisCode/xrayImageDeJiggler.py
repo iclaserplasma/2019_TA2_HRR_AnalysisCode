@@ -109,6 +109,11 @@ class xrayDeJiggler:
                 x_test = np.array(x_test)
             else:
                 x_test = BO.ask(1e-20)
+                if x_test is None:
+                    for nD in range(nDims):
+                        r = max(bounds[nD]) - min(bounds[nD])
+                        x_test.append(int(np.random.rand()*r+min(bounds[nD])))
+                    x_test = np.array(x_test)
 
             y_val = self.imgRollDiff(img,x_test)
             BO.tell(x_test,y_val,y_val*0.01)
@@ -127,9 +132,13 @@ class xrayDeJiggler:
         y_rot=[]
         imgComb=[]
         imgRef = None
+        buildRef = True
         if use_existing_ref:
             if self.imgRef is not None:
                 imgRef = self.imgRef
+                buildRef = False
+                
+        
             
 
         imgMeanThresh = 200
@@ -157,6 +166,10 @@ class xrayDeJiggler:
                 x_rot.append(int(x_opt[0]))
                 y_rot.append(int(x_opt[1]))
                 imgComb.append(shiftImage(img,x_opt))
+            
+            if buildRef:
+                imgRef = np.median(imgComb,axis=0)
+                self.imgRef = imgRef
         sys.stdout.flush()
         print('\r','Done')   
         

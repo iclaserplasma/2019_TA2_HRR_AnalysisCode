@@ -1,31 +1,20 @@
-import os
+﻿import os
 import matplotlib.pyplot as plt
 import numpy as np 
 from scipy.signal import medfilt
 from sqlDatabase import connectToSQL
 import logging
 import csv 
-# Works with file paths on all operating systems
-from pathlib import Path
-
 try:
-	import cPickle as pickle
+    import cPickle as pickle
 except ModuleNotFoundError:
-	import pickle
-from datetime import datetime
+    import pickle
 
 # IMPORT DIAGNOSTIC CODES
 import SPIDERAnalysis
 import HASOAnalysis
 import ESpecAnalysis
-import PreCompNFAnalysis
-import XRayAnalysis 
 
-
-try:
-	import probe_density_extraction 
-except:
-	print('Cannot import probe_density_extraction')
 
 # HELPER FUNCTIONS - COULD BE PLACED ELSEWHERE?
 def getSortedFolderItems(itemPath,key):
@@ -53,8 +42,45 @@ def loadRunObject(path):
 	run = pickle.load(f)
 	return run
 
-
 class dataRun:
+
+
+
+	# -------------------------------------------------------------------------------------------------------------------
+	# -----										WHATS IN HERE????		 											-----
+	# -------------------------------------------------------------------------------------------------------------------
+
+	# Housekeeping and admin
+	#	__init__
+	#	findAvailableDiagnostics
+	#	runsOrBursts
+	#	createAnalysisFolder
+	#	collectSQLData
+	#
+	# Diagnostic Function Calls
+	# 	Espec
+	#		performESpecAnalysis
+	#		getESpecCharge
+	#	SPIDER
+	#		getSpectralPhaseOrders
+	#		getTemporalProfile
+	#	
+	# A Selection of Generic Functions
+	#	getDiagDataPath	
+	#	getDiagAnalysisPath
+	#	getImage
+	#	averageImagesInFolder
+	#	averageReferenceImages
+	#	getCounts
+	#	subtractRemainingBg
+	#	createDataBuckets
+	#
+	# Saving and Loading Analysed Data
+	#	saveData
+	#	saveRunObject
+
+
+
 
 
 	# -------------------------------------------------------------------------------------------------------------------
@@ -62,72 +88,45 @@ class dataRun:
 	# -------------------------------------------------------------------------------------------------------------------
 
 
-	def __init__(self, baseDataFolder, baseAnalysisFolder, calibrationFolder, runDate, runName,verbose=0,overwrite=False):
+	def __init__(self, baseDataFolder, baseAnalysisFolder, calibrationFolder, runDate, runName,refRunDate,refRunName,verbose=0):
 		# baseDataFolder is the location of the Mirage Data folder
 		# runDate is a string
 		# runName is a string
 		
-		# First Check if the run Object already exists. If it does, then just load it in.
+		# Options	
+		self.verbose = verbose
 
-		runObjectPath = os.path.join(baseAnalysisFolder , 'General' , runDate , runName , 'runObject.pkl' )
-		doesRunObjectExist = os.path.isfile(runObjectPath)
+		self.baseDataFolder 	= baseDataFolder
+		self.baseAnalysisFolder	= baseAnalysisFolder
+		self.calibrationFolder  = calibrationFolder
 
-		if doesRunObjectExist and not overwrite:
-			oldRun = pickle.load( open( runObjectPath, "rb" ) )
-			print('Run Object already Exists. Loading it in. If you would prefer to start from scratch, use the argument overwrite==True')
-			self.verbose = verbose
+		# Data Information
+		self.runDate 			= runDate
+		self.runName 			= runName
+		loggingAnalysisFolder 	= self.createAnalysisFolder()
+		loggerFile 				= os.path.join(loggingAnalysisFolder,'analysisInfo.log')
+		logging.basicConfig(filename=loggerFile, filemode='w', format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S',level=logging.INFO)
+		self.logger 			= logging.getLogger('logFile')
+		self.diagList 			= self.findAvailableDiagnostics(runDate,runName)
+		datStyle, datShots, diagShotDict = self.runsOrBursts(runDate,runName,self.diagList)
+		self.datStyle 			= datStyle
+		self.datShots			= datShots
+		self.diagShotDict 		= diagShotDict
+		self.analysisPath 		= self.createAnalysisFolder()
 
-			self.baseDataFolder 	= oldRun.baseDataFolder
-			self.baseAnalysisFolder	= oldRun.baseAnalysisFolder
-			self.calibrationFolder  = oldRun.calibrationFolder
-
-			# Data Information
-			self.runDate 			= oldRun.runDate
-			self.runName 			= oldRun.runName
-			loggingAnalysisFolder 	= self.createAnalysisFolder()
-			self.loggerFile 		= oldRun.loggerFile
-			self.logThatShit('Analysis Continued\n')
-			
-
-			self.diagList 			= oldRun.diagList
-			self.datStyle 			= oldRun.datStyle
-			self.datShots			= oldRun.datShots
-			self.diagShotDict 		= oldRun.diagShotDict
-			self.analysisPath 		= self.createAnalysisFolder()
-		else:
-
-			# Options	
-			self.verbose = verbose
-
-			self.baseDataFolder 	= baseDataFolder
-			self.baseAnalysisFolder	= baseAnalysisFolder
-			self.calibrationFolder  = calibrationFolder
-
-			# Data Information
-			self.runDate 			= runDate
-			self.runName 			= runName
-
-			loggingAnalysisFolder 	= self.createAnalysisFolder()
-			self.loggerFile 		= os.path.join(loggingAnalysisFolder,'analysisInfo.log')
-			
-			# Open the first log and add to it
-			loggerFile = self.loggerFile
-			f = open(loggerFile, "w")
-			now = datetime. now()
-			current_time = now. strftime('%d/%m/%Y %H:%M:%S')	
-			f.write('\n' + current_time + ' - ' + 'Run Analysis Initiated\n')
-			f.close()
-			
-			self.diagList 			= self.findAvailableDiagnostics(runDate,runName)
-			datStyle, datShots, diagShotDict = self.runsOrBursts(runDate,runName,self.diagList)
-			self.datStyle 			= datStyle
-			self.datShots			= datShots
-			self.diagShotDict 		= diagShotDict
-			self.analysisPath 		= self.createAnalysisFolder()
+		# Reference Information
+		self.refRunDate			= refRunDate
+		self.refRunName			= refRunName
+		self.refDiagList 		= self.findAvailableDiagnostics(refRunDate,refRunName)
+		refStyle, refShots, refShotDict	= self.runsOrBursts(refRunDate,refRunName,self.refDiagList)
+		self.refStyle 			= refStyle
+		self.refShots			= refShots
+		self.refShotDict 		= refShotDict
+		
 
 
-			# Collect SQL Data
-			self.collectSQLData()
+		# Collect SQL Data
+		self.collectSQLData()
 
 
 
@@ -139,16 +138,16 @@ class dataRun:
 		unavailableDiags = []
 
 		for diag in diagList:
-			diagAvailable = True
-			diagAvailable = os.path.exists(os.path.join(baseDataFolder, diag, runDate, runName))
-			if diagAvailable is not True:
-				unavailableDiags.append(diag)
+		    diagAvailable = True
+		    diagAvailable = os.path.exists(os.path.join(baseDataFolder, diag, runDate, runName))
+		    if diagAvailable is not True:
+		        unavailableDiags.append(diag)
 		for diag in unavailableDiags:
-			diagList.remove(diag)
+		    diagList.remove(diag)
 		
-		self.logThatShit('\n\nList of Available Diagnostics for ' + os.path.join(runDate,runName) + '\n')
+		self.logger.info('\n\nList of Available Diagnostics for ' + os.path.join(runDate,runName) + '\n')
 		for element in diagList:
-				self.logThatShit(element)
+				self.logger.info(element)
 		if self.verbose:
 			print('\n\nList of Available Diagnostics for ' + os.path.join(runDate,runName) + '\n')
 			for element in diagList:
@@ -224,10 +223,10 @@ class dataRun:
 		if os.path.exists(analysisPath) is not True:
 			os.makedirs(analysisPath)
 			if self.verbose:
-				print('\n\nGeneral Analysis folder has been created\n{}\n'.format(analysisPath))
+				print('\n\nGeneral Analysis folder has been created\n')
 		else:
 			if self.verbose:
-				print('\n\nGeneral Analysis folder already exists\n{}\n'.format(analysisPath))
+				print('\n\nGeneral Analysis folder already exists\n')
 		return(analysisPath)
 
 
@@ -247,9 +246,9 @@ class dataRun:
 		gasCellLength = {}
 
 		for datum in SQLData:
-			shotOrBurst,Pressure,Length = datum
-			gasCellPressure[shotOrBurst] = Pressure
-			gasCellLength[shotOrBurst] = Length
+		    shotOrBurst,Pressure,Length = datum
+		    gasCellPressure[shotOrBurst] = Pressure
+		    gasCellLength[shotOrBurst] = Length
 
 		analysisPath,isItReal = self.getDiagAnalysisPath('General')
 		self.saveData(os.path.join(analysisPath,'GasCellPressure'),gasCellPressure)
@@ -263,28 +262,10 @@ class dataRun:
 	# -----										DIAGNOSTIC FUNCTION CALLS 											-----
 	# -------------------------------------------------------------------------------------------------------------------
 
-	# PROBE ANALYSIS
-	def performProbeDensityAnalysis(self, ):
-		diag = 'Probe_Interferometry'
-		print ("In ", diag)
 
-		filePathDict = self.createRunPathLists(diag)
-		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
-		print (analysisPath, pathExists)
-		
-		probeCalib = self.loadCalibrationData(diag)
-		for burstStr in filePathDict.keys():		
-			analysisSavePath = os.path.join(analysisPath,burstStr,'{}_Analysis'.format(diag))
-			analysedData = probe_density_extraction.extract_plasma_density(
-								filePathDict[burstStr],probeCalib, analysisSavePath)
-			
-			
-			self.saveData(analysisSavePath,analysedData)
-
-			self.logThatShit('Performed Probe_Interferometry Analysis for ' + burstStr)
-			print('Analysed Probe_Interferometry '+ burstStr)
 
 	# ELECTRON ANALYSIS 
+
 	def performESpecAnalysis(self,useCalibration=True,overwriteData=False):
 		# Load the espec images for the run and analyse
 		# if it exists get it, if not, run initESpecAnalysis and update log
@@ -300,39 +281,32 @@ class dataRun:
 			if useCalibration:
 				analysedData = ESpecAnalysis.ESpecSCEC(filePathDict[burstStr],eSpecCalib)
 				# Save the data
-				analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis')
+				analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecCharge')
 				self.saveData(analysisSavePath,analysedData)
 
 			else:
 				analysedData = ESpecAnalysis.ESpecSCEC(filePathDict[burstStr])
 				# Save the data
-				analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_NoCalibration')
+				analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecCharge_NoCalibration')
 				self.saveData(analysisSavePath,analysedData)
-			self.logThatShit('Performed HighESpec Analysis for ' + burstStr)
-			print('Analysed ESpec Spectrum, Charge, totalEnergy, cutoffEnergy95 for Burst '+ burstStr)
+			
+			print('Analysed ESpec Charge for Burst '+ burstStr)
 
 
 
 	# SPIDER ANALYSIS CALLS -- THIS IS CURRENTLY JUST AN EXAMPLE
-	def performSPIDERAnalysis(self):
+	def getSpectralPhaseOrders(self):
 		diag = 'SPIDER'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
+		for burstStr in filePathDict.keys():		
+			analysedData = SPIDERAnalysis.polyOrders(filePathDict[burstStr])
+			# Save the data
+			analysisSavePath = os.path.join(analysisPath,burstStr,'analysis')
+			self.saveData(analysisSavePath,analysedData)
 
-		for burstStr in filePathDict.keys():	
-			for filePath in filePathDict[burstStr]:	
-				analysedData = SPIDERAnalysis.analyseSPIDERData(filePath)
-				
-				# Save the data
-				l = Path(filePath)		# Splitting the filepath in all operating systems, '\\' and '/'
-				filename = l.parts[-1]
-				filename = filename[0:-4] + '_Analysis'
+		# Print some shit to the log here. Someone to write function.
 
-				analysisSavePath = os.path.join(analysisPath,burstStr,filename)
-				print (analysisPath, analysisSavePath)
-				self.saveData(analysisSavePath,analysedData)
-			self.logThatShit('Performed SPIDER Analysis for ' + burstStr)
-			print('Analysed SPIDER '+ burstStr)
 		return 0
 
 	# HASO Analysis
@@ -356,68 +330,11 @@ class dataRun:
 				# Save the data
 				analysisSavePath = os.path.join(analysisPath,burstStr,'waveFrontOnLeakage')
 				self.saveData(analysisSavePath,analysedData)
-			self.logThatShit('Performed HASO Analysis for ' + burstStr)
+			
 			print('Analysed HASO '+ burstStr)
 
 
-	# PRE COMP NF (BEAM ENERGY) Anlaysis
-	def performPreCompNFAnalysis(self):
-		diag = 'PreCompNF'
-		filePathDict = self.createRunPathLists(diag)
-		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
-
-		NFCalib = self.loadCalibrationData(diag)
-
-		for burstStr in filePathDict.keys():
-			avgEnergy = 0
-			for filePath in filePathDict[burstStr]:	
-				analysedData = PreCompNFAnalysis.analyseNFImage(filePath,NFCalib)
-				avgEnergy = avgEnergy + analysedData[0]
-
-				# Save the data
-				l = Path(filePath)		# Splitting the filepath in all operating systems, '\\' and '/'
-				filename = l.parts[-1]				
-				filename = filename[0:-5] + '_Analysis'
-
-				analysisSavePath = os.path.join(analysisPath,burstStr,filename)
-				self.saveData(analysisSavePath,analysedData)
-			avgEnergy = avgEnergy/len(filePathDict[burstStr])
-			energyStr = '%.3f J' %(avgEnergy)
-			self.logThatShit('Performed NF Analysis for ' + burstStr +'. Avg Pulse Energy On Target = ' +  energyStr)
-			print('Performed NF Analysis for ' + burstStr +'. Avg Pulse Energy On Target = ' +  energyStr)
-		return 0	
-
-
-	# X-Ray Anlaysis
-	def performXRayAnalysis(self,justGetCounts=False):
-		diag = 'XRay'
-		filePathDict = self.createRunPathLists(diag)
-		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
-
-		xrayCalib = self.loadCalibrationData(diag)
-
-		for burstStr in filePathDict.keys():
-			if justGetCounts:
-				# Here we're going to avoid all actual x-ray code and just sum the image counts
-				# Not even using a background. This is to mimic what happened during optimization
-				imgCounts  = []
-				for filePath in filePathDict[burstStr]:	
-					imgCounts.append(np.sum(plt.imread(filePath).astype(float)))
-				analysedData = (np.mean(imgCounts),np.std(imgCounts))
-				analysisSavePath = os.path.join(analysisPath,burstStr,'XRayImgCounts')
-				self.saveData(analysisSavePath,analysedData)
-				self.logThatShit('Averaged Counts for XRay images for ' + burstStr)
-				print('Averaged Counts for XRay images for ' + burstStr )
-				
-			else:
-				analysedData = XRayAnalysis.XRayEcrit(filePathDict[burstStr],xrayCalib)
-				analysisSavePath = os.path.join(analysisPath,burstStr,'XRayAnalysis')
-				self.saveData(analysisSavePath,analysedData)
-				self.logThatShit('Performed XRay Analysis for ' + burstStr)
-				print('Performed XRay Analysis for ' + burstStr )
-			
 		
-		return 0	
 
 	# -------------------------------------------------------------------------------------------------------------------
 	# -----								A SELECTION OF GENERIC FUNCTIONS											-----
@@ -428,6 +345,7 @@ class dataRun:
 
 	def getDiagDataPath(self,diag):
 		# Gives you back the relative paths to retrieve data from
+		# DOESN'T WORK FOR ANALYSIS OF DARKFIELDS OR REFERNECES
 		baseDataFolder 	= self.baseDataFolder
 		runDate 		   	= self.runDate
 		runName				= self.runName
@@ -438,6 +356,7 @@ class dataRun:
 
 	def getDiagAnalysisPath(self,diag):
 		# Gives you back the relative analysis path to save analysis data or retrieve analysis data from
+		# DOESN'T WORK FOR ANALYSIS OF DARKFIELDS OR REFERNECES
 		baseAnalysisFolder 	= self.baseAnalysisFolder
 		runDate 		   	= self.runDate
 		runName				= self.runName
@@ -477,13 +396,17 @@ class dataRun:
 			img = img/cntr
 		return(img)
 
-	def averageReferenceImages(self,diag, refRunDate,refRunName):
+	def averageReferenceImages(self,diag):
 		# Average the images of a particular diagnostic
 		baseDataFolder = self.baseDataFolder
+		
+		# First lets get the reference counts
+		refRunDate = self.refRunDate
+		refRunName = self.refRunName
 
-		dataStyle, shots, diagShotDict = runsOrBursts(runDate,runName,diagList)
 		refPath = os.path.join(baseDataFolder,diag,refRunDate,refRunName)
-		if dataStyle == 'burst':
+
+		if type(self.refShots) is tuple:
 			# In this case go through burst by burst
 			bursts = os.listdir(refPath)
 			bgImg = None
@@ -522,39 +445,39 @@ class dataRun:
 
 
 	def createDataBuckets(arr):
-		# Bin the data using too many (although still a reasonable amount of) bins.
-		numElements = round(len(arr)/2)
-		bins = np.linspace(np.amin(arr),np.amax(arr),numElements)
-		vals,edges=np.histogram(arr,bins)
+	    # Bin the data using too many (although still a reasonable amount of) bins.
+	    numElements = round(len(arr)/2)
+	    bins = np.linspace(np.amin(arr),np.amax(arr),numElements)
+	    vals,edges=np.histogram(arr,bins)
 
-		# Fourier transform this
-		BFT = np.fft.fft(vals)
+	    # Fourier transform this
+	    BFT = np.fft.fft(vals)
 
-		# Find the first peak of the FFT that isn't the DC peak
-		peaks,properties = find_peaks(BFT)
-		sortedIndexs = np.argsort(BFT[peaks]) # sorts in ascending order
-		sortedIndexs[-2:]
-		peaks = peaks[sortedIndexs[-2:]]
-		peak = np.amin(peaks)
+	    # Find the first peak of the FFT that isn't the DC peak
+	    peaks,properties = find_peaks(BFT)
+	    sortedIndexs = np.argsort(BFT[peaks]) # sorts in ascending order
+	    sortedIndexs[-2:]
+	    peaks = peaks[sortedIndexs[-2:]]
+	    peak = np.amin(peaks)
 
-		# This tells us the number of bins (minus 1) that should be used in the binning
-		numElements = peak + 1
-		#bins = np.linspace(np.amin(arr),np.amax(arr),numElements)
-		#vals,edges=np.histogram(arr,bins)
+	    # This tells us the number of bins (minus 1) that should be used in the binning
+	    numElements = peak + 1
+	    #bins = np.linspace(np.amin(arr),np.amax(arr),numElements)
+	    #vals,edges=np.histogram(arr,bins)
 
-		# find the average value in the first bucket and the last bucket
-		datRange = np.amax(arr) - np.amin(arr)
-		binWidth = datRange/numElements
-		tmp = np.where(arr < np.amin(arr)+ binWidth)
-		bin1 = np.mean([arr[i] for i in tmp[0]])
+	    # find the average value in the first bucket and the last bucket
+	    datRange = np.amax(arr) - np.amin(arr)
+	    binWidth = datRange/numElements
+	    tmp = np.where(arr < np.amin(arr)+ binWidth)
+	    bin1 = np.mean([arr[i] for i in tmp[0]])
 
-		tmp2 = np.where(arr > np.amax(arr)- binWidth)
-		bin2 = np.mean([arr[i] for i in tmp2[0]])
+	    tmp2 = np.where(arr > np.amax(arr)- binWidth)
+	    bin2 = np.mean([arr[i] for i in tmp2[0]])
 
-		binCenters = np.linspace(bin1,bin2,numElements)
-		binWidth = (bin2-bin1)/numElements
-		
-		return binCenters,binWidth
+	    binCenters = np.linspace(bin1,bin2,numElements)
+	    binWidth = (bin2-bin1)/numElements
+	    
+	    return binCenters,binWidth
 
 
 
@@ -578,22 +501,6 @@ class dataRun:
 
 	#	np.save(fullFilePath, data)
 
-	def logThatShit(self, string2Log):
-		'''Need to open logger file, append the string and close it'''
-		#logging.basicConfig(filename=self.loggerFile, filemode='a', format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S',level=logging.INFO)
-		#logger.info(string2Log)
-		##logger = logging.getLogger(self.loggerFile )
-		#logging.shutdown()
-		loggerFile = self.loggerFile
-		f = open(loggerFile, "a")
-		now = datetime. now()
-		current_time = now. strftime('%d/%m/%Y %H:%M:%S')	
-		f.write('\n' + current_time + ' - ' + string2Log)
-		f.close()
-
-
-		return 0
-
 	def saveData(self,path,data):
 		# Check if the folder exists, bearing in mind that we might have an extra
 		dirName = os.path.dirname(path)
@@ -605,7 +512,6 @@ class dataRun:
 		baseAnalysisFolder = self.baseAnalysisFolder
 		runDate = self.runDate
 		runName = self.runName
-		self.logThatShit('Saving Run Object\n\n')
 		outputFile = open(os.path.join(baseAnalysisFolder,'General',runDate,runName,'runObject.pkl'), 'wb')
 		pickle.dump(self,outputFile,protocol=0)
 		outputFile.close()
@@ -622,60 +528,46 @@ class dataRun:
 		runDate = self.runDate
 		runName = self.runName
 
-		
 		dateRunString = runDate + '\\' + runName
-		print ("dateRunString to search for: ", dateRunString)
 
 		# Now open the csv file and find the row in which the first column entry matches the dateRunString
-		calibrationFolder = Path(self.calibrationFolder)
-		calibrationPath = calibrationFolder / 'CalibrationPaths.csv'
-		''' CIDU
-		The code using the csv reader has been failing.
-		Trying using pandas
-		'''
-		import pandas as pd
+		calibrationFolder = self.calibrationFolder
+		calibrationPath = os.path.join(calibrationFolder,'CalibrationPaths.csv')
+		csv_file = csv.reader(open(calibrationPath, "r"), delimiter=",")
 
-		def db_index(db, dateRunString, diag):
-		    # Located the region in the database that corresponds to the correct run and diagnostic
-		    runCalFiles = db[db[' '] == dateRunString]
-		    keys = db.keys().tolist()
-		#     print (runCalFiles)
-			# Find the index of the run
-		    inds = db.index[db[' '] == dateRunString].tolist()[0]
-		    for i, k in enumerate(keys):
-		    	# Find the index of the diag (column)
-		        if k == diag:
-		            keyIndex = i
-			# print ("Database Index")
-			# print(inds, keyIndex)		            
-		    return inds, keyIndex
+		cntr = 0
+		for row in csv_file:
+			if cntr == 0:
+				# This row contains the list of diagnostics
+				diagList = row
+			cntr = 1
+			dateRunStringTest = row[0]
+			if dateRunStringTest == dateRunString:
+				break
 
-		db = pd.read_csv(calibrationPath)
-		inds, keyIndex = db_index(db, dateRunString, diag)
-		
-		calibrationFilePath = str(db.iloc[inds, keyIndex])
-		print ('The file path')
-		print (calibrationFilePath)
-		
-		fileNameComponents = calibrationFilePath.split("\\")
+		cntr = 0
+		for tmpDiag in diagList:
+			if diag == tmpDiag:
+				break
+			cntr = cntr + 1
+			
+		calibrationFilePath = row[cntr]
 
-
-		print("The cal file path from CSV", calibrationFilePath)
-		print("The components of the calibration file path", fileNameComponents)
-		# Make the file path with pathlib, all OS system compatibility
-		calibrationFilePath = Path(fileNameComponents[0])
-		if len(fileNameComponents) > 1:
-			for p in fileNameComponents[1:]:
-				calibrationFilePath = calibrationFilePath / p
-		
 		# Now Load in the data 
-		calibrationFilePath = Path(calibrationFolder, calibrationFilePath)
 		try:
-			calibData = np.load(calibrationFilePath,allow_pickle=True)
+			calibData = np.load(os.path.join(calibrationFolder,calibrationFilePath),allow_pickle=True)
 		except:
 			print('Info Recieved')
-			print(calibrationFilePath)
+			print(os.path.join(calibrationFolder,calibrationFilePath))
 			raise Exception('COULD NOT LOAD CALIBRATION FILE, PLEASE CHECK IT EXISTS AND THE PATH IN calibrationPaths.csv IS CORRECT')
 
 
 		return calibData
+
+
+
+
+
+
+
+
