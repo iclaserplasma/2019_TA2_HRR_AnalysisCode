@@ -1079,7 +1079,7 @@ class dataRun:
 		bursts = [f for f in os.listdir(runDir) if not f.startswith('.')]
 		
 		z4 = []
-		burstNums = []
+		shotID = []
 
 		for burst in bursts:
 			filename = os.path.join(runDir,burst,'calibratedWavefront.npy')
