@@ -1088,6 +1088,7 @@ class dataRun:
 			z4.append(zernikes[4])
 			shotID.append(burst)
 		
+		burstNums = []
 		for burst in shotID:
 			burstNums.append(int(burst[5:]))
 		indxOrder = np.argsort(burstNums)
