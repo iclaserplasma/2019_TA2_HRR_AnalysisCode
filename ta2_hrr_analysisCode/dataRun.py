@@ -1062,9 +1062,36 @@ class dataRun:
 
 		return shotID_sorted, gasPressure_sorted
 
-	def loadWavefrontData(self):
+	def loadHASOFocusData(self):
 		# Perhaps here we want not only to load burst, but individual shots
 		# We need to get adapt the earlier HASOAnalysis function above to do this.
 		a = 1
+
+		'calibratedWavefront.npy'
+
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+
+		diag = 'HASO'
 		
-    
+		runDir = os.path.join(baseAnalysisFolder , diag,  runDate , runName)
+		bursts = [f for f in os.listdir(runDir) if not f.startswith('.')]
+		
+		z4 = []
+		burstNums = []
+
+		for burst in bursts:
+			filename = os.path.join(runDir,burst,'calibratedWavefront.npy')
+			zernikes = np.load(filename)
+
+			z4.append(zernikes[4])
+			shotID.append(burst)
+		
+		for burst in shotID:
+			burstNums.append(int(burst[5:]))
+		indxOrder = np.argsort(burstNums)
+		shotID_sorted = np.asarray(shotID)[indxOrder]
+		z4_sorted = np.asarray(z4)[indxOrder] 
+
+		return shotID_sorted, z4_sorted
