@@ -270,6 +270,9 @@ class dataRun:
 
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
+		if not pathExists:
+			os.makedirs(analysisPath)
+		analysisPath, pathExists = self.getDiagAnalysisPath(diag)			
 		print (analysisPath, pathExists)
 		
 		probeCalib = self.loadCalibrationData(diag)

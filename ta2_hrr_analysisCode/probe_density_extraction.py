@@ -7,7 +7,7 @@
     /    |   /   |  |\ | ||_
    /____ |__/\ . |  | \|_|\_|
    __________________________ .
-Created on 31/01/2020, 18:58:58
+Created on 05/02/2020, 15:02:03
 @author: chrisunderwood
 """
 import numpy as np
@@ -262,11 +262,30 @@ class probe_image_analysis():
         sgY = self.superGaussian(np.arange(s[1]), (left + right)*0.5, abs(right-left), power)
         sgX = self.superGaussian(np.arange(s[0]), (top + bot)*0.5, abs(top - bot), power)    
 
-        for i, x in enumerate(sgX):
-            for j, y in enumerate(sgY):
-                cropGaussian[i][j] = x * y
+        # # Method one, 1.96s
+        # for i, x in enumerate(sgX):
+        #     for j, y in enumerate(sgY):
+        #         cropGaussian[i][j] = x * y
+        # # cropGaussian = np.real(cropGaussian)
+        
+        # Method two,  78ms
+        yMask = sgY > 0.005
+        xMask = sgX > 0.005
+        xIndexs = []
+        yIndexs = []
+        for i, x in enumerate(xMask):
+            if x:
+                xIndexs.append(i)
+        for i, y in enumerate(yMask):
+            if y:
+                yIndexs.append(i)       
+        # Just use region of gaussians where the peak is large enough
+        for i in xIndexs:
+            for j in yIndexs:
+                cropGaussian[i][j] = sgX[i] * sgY[j]     
+        
+        print ("\t\tOutput shape of crop:" ,np.shape(cropGaussian))
     
-        cropGaussian = np.real(cropGaussian)
         return cropGaussian        
     
     def rotate_array(self, arr, angleDeg):
@@ -336,7 +355,8 @@ class phaseShift(probe_image_analysis, filter_image):
         if plotting:
             self.plot_raw_input()
     
-    def load_data(self, loadPath, imFile, refFile = None, blurSize = 35, plotting = False):
+    def load_data(self, loadPath, imFile, refFile = None, blurSize = 35, plotting = False,
+        plottingBlurring = False):
         """ Load data into the class from file
         """        
         
@@ -369,7 +389,7 @@ class phaseShift(probe_image_analysis, filter_image):
             self.plot_raw_input()        
         if imFile.split('.')[-1] in ['tiff', 'TIFF']:
             # Removing the background by subtracting a blurred version of the image
-            self.blur(blurSize, plotting)                             
+            self.blur(blurSize, plottingBlurring)                             
             
     def zeroPadImages(self, padSize = 100):
         """ Pads an image with zeros
@@ -431,10 +451,12 @@ class phaseShift(probe_image_analysis, filter_image):
                 print ("Ref is same size as crop region")
                 self.ref_PlasmaChannel = self.ref * gaus_cropping
             else:
+                print ("Ref is a different size to the crop region")
                 self.cropCentreOfRef_DiffShape(self.padSize, self.paddingX, self.paddingY)
-                plt.title("Smaller reference cropped")
-                self.plot_data(self.ref_PlasmaChannel)
-                print (self.ref_PlasmaChannel.shape)
+                if plotting:
+                    plt.title("Smaller reference cropped")
+                    self.plot_data(self.ref_PlasmaChannel)
+                    print (self.ref_PlasmaChannel.shape)
         else:
             # Use a region where the fringes are unperturbed as the reference
             _, referenceOutline = self.crop_reference_fringes(self.padSize, self.paddingX, self.paddingY, 
@@ -844,6 +866,17 @@ class phi_to_rho(fourier_filter_for_Phasemask):
         Fit a 2D plane and subtract
         """
         # self.bg = np.ma.array(self.phase, mask = self.mask)
+
+        print ("The average phase shift in the channel {}".format(np.average(self.phase * self.mask)))
+        if np.average(self.phase * self.mask) < 0:
+            print ("Inverting the phase")
+            f, ax = plt.subplots(ncols = 2)
+            im = ax[0].imshow(self.phase)
+            plt.colorbar(im, ax[0])
+            self.phase = -self.phase
+            im = ax[1].imshow(self.phase)
+            plt.colorbar(im, ax[1])       
+            plt.show()     
         m = self.phase.shape[0]
         n = self.phase.shape[1]
         X1, X2 = np.mgrid[:m, :n]    
@@ -906,7 +939,7 @@ class phi_to_rho(fourier_filter_for_Phasemask):
         print ("Angle from horozontal", self.angle)
         # return self.angle
             
-    def plasmaChannel_Horz(self, angle = None,  plotting = False):
+    def plasmaChannel_Horz(self, angle = None,  plotting = False, cropToImage = False):
         if angle is not None:
             self.angle = angle
         else:
@@ -923,12 +956,13 @@ class phi_to_rho(fourier_filter_for_Phasemask):
             if p:
                 ind = ind + 1
                 break
-        if plotting and False:
+        if plotting and cropToImage:
             plt.plot(lineout)
             l, h = plt.ylim()
             plt.vlines(ind, l, h)
             plt.show()
-        self.phase = self.phase[:, ind:]
+        if cropToImage:
+            self.phase = self.phase[:, ind:]
 
         if plotting:
             f, ax = plt.subplots(ncols = 2)
@@ -1153,6 +1187,11 @@ def extract_plasma_density(data_file_s, calibrationData, analysisSavePath):
         output = (nozzleDensity, cellDensity)
         print (len(output))
         burstData.append(output)
+        print ("Save the data")
+        folderpath = analysisSavePath.split("Probe_Interferometry_Analysis")[0]
+        print (folderpath)
+        func.check_and_makeFolder(folderpath)
+
 
         np.save(analysisSavePath.split(".")[0]  +  imFile.split(".")[0].split('Shot')[1] + '.npy', output)
 

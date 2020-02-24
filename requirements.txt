@@ -7,3 +7,4 @@ shapely
 PyAbel
 mysql-connector-python
 opencv-python
+peakutils
