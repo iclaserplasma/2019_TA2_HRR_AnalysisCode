@@ -7,7 +7,7 @@
     /    |   /   |  |\ | ||_
    /____ |__/\ . |  | \|_|\_|
    __________________________ .
-Created on 05/02/2020, 15:02:03
+Modified on 24/02/2020, 16:04:10
 @author: chrisunderwood
 """
 import numpy as np
@@ -827,17 +827,94 @@ class phaseShift(probe_image_analysis, filter_image):
 class fourier_filter_for_Phasemask(probe_image_analysis):
     def TakeImage(self, phi):
         self.phase = phi
-    
-    def create_mask(self, x = 0.9, y = 0.9, mask_percentage = 0.5):
         
+    def correctPhaseShiftSign(self, plotting = True):
+        
+        from peakdetect import peakdetect
+        l = np.average(self.phase,axis=1)
+        l -= np.average(l)  # attempt to set around zero
+        max_peaks, min_peaks = np.array(peakdetect(l, lookahead= len(l) // 6))
+        peaks = [max_peaks, min_peaks]
+        peakDict = {}
+        for p, n in zip( [max_peaks, min_peaks], ["max_peaks", "min_peaks"]) :
+            if len(p) > 0:
+                x, y = zip(*p)
+                if len(x) > 1:
+                    y = np.array(y)
+                    ind = func.nearposn(abs(y), max(abs(y)) )
+                    x = (x[ind],)
+                    y = (y[ind],)
+                
+                peakDict[n] = [x,y]
+            else:
+                peakDict[n] = False
+                
+        for n in peakDict:
+            print (n, peakDict[n])
+            
+        decisionMade = False
+        if peakDict['max_peaks'] == False and peakDict['min_peaks'] != False:
+            print ("Need to invert")
+            invert = -1
+            decisionMade = True
+        if peakDict['min_peaks'] == False and peakDict['max_peaks'] != False :
+            print ("Need to remain the same invert")            
+            invert = 1
+            decisionMade = True
+            
+        if decisionMade:
+            self.phase = self.phase * invert       
+            print ("The phase in the correct orientation")
+            if plotting:
+                plt.title("Correct Sign Phase shift")
+                plt.imshow(self.phase)
+                plt.colorbar()
+                plt.show()
+        else:
+            
+            if plotting:
+                plt.figure(figsize=(6,4))
+                plt.title("y lineout of phase, with found peaks")
+                plt.plot(l)
+            peaks = []
+            for n in peakDict:
+                peaks.append(peakDict[n])
+            print (peaks)
+            # print (np.shape(peaks) )
+            # if len(np.shape(peaks)) == 3:
+            #     s = np.shape(peaks)
+            #     peaks = np.array(peaks).reshape( s[0], s[2])
+            peaks = np.array(peaks)
+            
+            if plotting:
+                plt.plot(peaks[:,0], peaks[:,1], 's')
+                plt.show()
+            ind = np.where(abs(peaks[:,1]) == max(abs(peaks[:,1])))[0][0]
+            if peaks[ind][1] < 0:
+                print ("Inverting the phase, multiple peaks found.")
+                self.phase = self.phase * -1
+                if plotting:
+                    plt.title("Correct Sign Phase shift")
+                    plt.imshow(self.phase)
+                    plt.colorbar()
+                    plt.show()
+            
+        
+        
+    
+    def create_mask(self, x = 0.9, y = 0.9, mask_percentage = 0.5, plotPhaseShift = False, 
+                    plotMasks = False):
+        self.correctPhaseShiftSign(plotPhaseShift)
         self.F_image= np.fft.fft(self.phase)
         self.crop_in_fourier_space(x, y)
         self.filtered_image = np.fft.ifft(self.F_image)
         self.norm_filter = func.normaliseArr(np.real(self.filtered_image))
-        self.mask = self.norm_filter < mask_percentage
-        self.antimask = self.norm_filter > mask_percentage
-        
-        self.bg = self.mask * self.phase
+        self.mask_bgTrue = self.norm_filter < mask_percentage
+        self.mask_pcTrue = self.norm_filter > mask_percentage
+
+        if plotMasks:
+            self.showMasks()        
+        self.bg = self.mask_bgTrue * self.phase
     
     def crop_in_fourier_space(self, x = 0.5, y = 0.5):
         y = int(self.phase.shape[0]//2 * y)
@@ -865,18 +942,8 @@ class phi_to_rho(fourier_filter_for_Phasemask):
         """ Fit the background.
         Fit a 2D plane and subtract
         """
-        # self.bg = np.ma.array(self.phase, mask = self.mask)
-
-        print ("The average phase shift in the channel {}".format(np.average(self.phase * self.mask)))
-        if np.average(self.phase * self.mask) < 0:
-            print ("Inverting the phase")
-            f, ax = plt.subplots(ncols = 2)
-            im = ax[0].imshow(self.phase)
-            plt.colorbar(im, ax[0])
-            self.phase = -self.phase
-            im = ax[1].imshow(self.phase)
-            plt.colorbar(im, ax[1])       
-            plt.show()     
+        # self.bg = np.ma.array(self.phase, mask = self.mask_bgTrue)
+   
         m = self.phase.shape[0]
         n = self.phase.shape[1]
         X1, X2 = np.mgrid[:m, :n]    
@@ -914,40 +981,66 @@ class phi_to_rho(fourier_filter_for_Phasemask):
             ax[1].set_title("Background plane fitted")            
             plt.show()
             
+    def showMasks(self):
+        f, ax = plt.subplots(ncols = 2, sharex = True, sharey = True)
+        ax[0].imshow(self.mask_bgTrue)
+        ax[1].imshow(self.mask_pcTrue)
+        ax[0].set_title("mask, background")
+        ax[1].set_title("mask, PC")        
+        plt.show()
+        
+        
     def find_PC_angle(self, plotting = False):
         ''' Rotated the plasma channel so it is level.
         '''        
-        phaseShift = self.phase * self.antimask
+        phaseShift = self.phase * self.mask_pcTrue
+        
     
         indexes = []
         for i, col in enumerate(phaseShift.T):
-            ind = find_peaks(col, height=phaseShift.max() * 0.8, distance= 15)
-            if len(ind) == 2:
-                if len(ind[0]) == 1:
-                    indexes.append( [ i, ind[0][0]] )
+            if False:
+                # option 1
+                ind = find_peaks(col, height=phaseShift.max() * 0.8, distance= 15)
+                # print (ind)
+                if len(ind) == 2:
+                    if len(ind[0]) == 1:
+                        indexes.append( [ i, ind[0][0]] )
+            else:
+                # # option 2
+                import peakutils
+                ind = peakutils.indexes(col, thres=0.02/max(col), min_dist=30)
+                if len(ind) == 1:
+                    indexes.append([i, ind[0]])
+
         indexes = np.array( indexes )    
+        print (len(indexes))
+        if len(indexes) < 3:
+            plt.imshow(phaseShift)
+            plt.colorbar()
+            plt.show()
+            assert False
         popt, pcov = curve_fit(func.lin, indexes[:,0], indexes[:,1], p0 = [0, np.average(indexes[:,1])] )
         if plotting:        
             plt.plot(indexes[:,0], indexes[:,1])
             plt.imshow(phaseShift)
             plt.colorbar()
-            plt.plot(indexes[:,0], func.lin(indexes[:,0], *popt))    
+            plt.plot(indexes[:,0], func.lin(indexes[:,0], *popt), 'o-')    
             plt.show()
         
         self.centerOfPlasmaChannel = indexes
         self.angle  = np.rad2deg(np.arctan(popt[0]))
-        print ("Angle from horozontal", self.angle)
+        print ("Angle from horizontal", self.angle)
         # return self.angle
             
     def plasmaChannel_Horz(self, angle = None,  plotting = False, cropToImage = False):
         if angle is not None:
             self.angle = angle
         else:
-            self.find_PC_angle()
+            self.find_PC_angle(plotting)
         pInit = self.phase
         self.phase = self.rotate_array(self.phase, self.angle)
         self.phase_rot_mask = self.rotate_array(np.ones_like(self.phase), self.angle)
-        self.phase_rot_mask_mask = self.rotate_array(np.array(self.antimask, dtype = float), self.angle)
+        self.phase_rot_mask_mask = self.rotate_array(np.array(self.mask_pcTrue, dtype = float), self.angle)
         
         # Crop to the plasma channel where the rotation is not effecting the result
         lineout = self.phase_rot_mask_mask.sum(axis = 0)
@@ -968,7 +1061,8 @@ class phi_to_rho(fourier_filter_for_Phasemask):
             f, ax = plt.subplots(ncols = 2)
             ax[0].imshow(pInit)
             if hasattr(self, "centerOfPlasmaChannel"):
-                ax[0].plot(self.centerOfPlasmaChannel[:,0], self.centerOfPlasmaChannel[:,1])
+                ax[0].plot(self.centerOfPlasmaChannel[:,0], self.centerOfPlasmaChannel[:,1],
+                        'o-r')
             ax[1].imshow(self.phase)
             ax[0].set_title("Initial")
             ax[1].set_title("Rotated to PC horz")
@@ -1075,7 +1169,10 @@ class phi_to_rho(fourier_filter_for_Phasemask):
                 ax[1].set_ylabel("Plasma Density ($m^{-3}$)")
             plt.show()        
             
-        return (xAxis, yAxis, self.n_e), np.c_[np.arange(len(lineout_ave)) * self.sizePerPixel *1e3, lineout_ave]
+        # Returns two arrays
+        # -- 2D Data: the x and y axis, the electron density, the phase shift
+        # -- 1D Data: the lineout of n_e through the cell/nozzle
+        return (xAxis, yAxis, self.n_e, self.phase), np.c_[np.arange(len(lineout_ave)) * self.sizePerPixel *1e3, lineout_ave]
         
         
         
