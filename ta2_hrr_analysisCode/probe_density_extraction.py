@@ -1196,7 +1196,3 @@ def extract_plasma_density(data_file_s, calibrationData, analysisSavePath):
         np.save(analysisSavePath.split(".")[0]  +  imFile.split(".")[0].split('Shot')[1] + '.npy', output)
 
     return burstData
-
-
-
-

@@ -684,11 +684,3 @@ class dataRun:
 
 
 		return calibData
-
-
-
-
-
-
-
-
