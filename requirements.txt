@@ -8,3 +8,4 @@ PyAbel
 mysql-connector-python
 opencv-python
 peakutils
+peakdetect
