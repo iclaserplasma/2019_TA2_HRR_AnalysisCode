@@ -7,7 +7,7 @@
     /    |   /   |  |\ | ||_
    /____ |__/\ . |  | \|_|\_|
    __________________________ .
-Modified on 24/02/2020, 16:04:10
+Modified on 25/02/2020, 13:10:52
 @author: chrisunderwood
 """
 import numpy as np
@@ -90,7 +90,7 @@ class filter_image(loadInDataToNumpy):
         self.im_gblur = ndimage.gaussian_filter(arr,
                   sigma=(sigSize, sigSize), order=0)
 
-        print( type(arr), type(self.im_gblur))
+        # print( type(arr), type(self.im_gblur))
 
         if plotting:
             plt.imshow(self.im_gblur, 
@@ -254,7 +254,7 @@ class probe_image_analysis():
                                      power = 8):
         """ Create a window to crop in fourier space with
         """
-        print ("Creating Gaussian To Crop. Image shape", np.shape(image))
+        # print ("Creating Gaussian To Crop. Image shape", np.shape(image))
         bot, top, left, right = btlr
         cropGaussian = np.zeros_like(image, dtype = float)
 
@@ -262,13 +262,6 @@ class probe_image_analysis():
         sgY = self.superGaussian(np.arange(s[1]), (left + right)*0.5, abs(right-left), power)
         sgX = self.superGaussian(np.arange(s[0]), (top + bot)*0.5, abs(top - bot), power)    
 
-        # # Method one, 1.96s
-        # for i, x in enumerate(sgX):
-        #     for j, y in enumerate(sgY):
-        #         cropGaussian[i][j] = x * y
-        # # cropGaussian = np.real(cropGaussian)
-        
-        # Method two,  78ms
         yMask = sgY > 0.005
         xMask = sgX > 0.005
         xIndexs = []
@@ -282,9 +275,8 @@ class probe_image_analysis():
         # Just use region of gaussians where the peak is large enough
         for i in xIndexs:
             for j in yIndexs:
-                cropGaussian[i][j] = sgX[i] * sgY[j]     
-        
-        print ("\t\tOutput shape of crop:" ,np.shape(cropGaussian))
+                cropGaussian[i][j] = sgX[i] * sgY[j]         
+        # print ("\t\tOutput shape of crop:" ,np.shape(cropGaussian))
     
         return cropGaussian        
     
@@ -299,7 +291,7 @@ class probe_image_analysis():
 
 class phaseShift(probe_image_analysis, filter_image):   
     def __init__(self, power = 6):
-        print ("Creating phaseShift class")
+        # print ("Creating phaseShift class")
         self.gausPower = 2*power
 
         
@@ -448,15 +440,15 @@ class phaseShift(probe_image_analysis, filter_image):
         
         if self.refExists:
             if self.refSameSize:
-                print ("Ref is same size as crop region")
+                if verbose: print ("Ref is same size as crop region")
                 self.ref_PlasmaChannel = self.ref * gaus_cropping
             else:
-                print ("Ref is a different size to the crop region")
+                if verbose: print ("Ref is a different size to the crop region")
                 self.cropCentreOfRef_DiffShape(self.padSize, self.paddingX, self.paddingY)
                 if plotting:
                     plt.title("Smaller reference cropped")
                     self.plot_data(self.ref_PlasmaChannel)
-                    print (self.ref_PlasmaChannel.shape)
+                    if verbose: print (self.ref_PlasmaChannel.shape)
         else:
             # Use a region where the fringes are unperturbed as the reference
             _, referenceOutline = self.crop_reference_fringes(self.padSize, self.paddingX, self.paddingY, 
@@ -484,7 +476,7 @@ class phaseShift(probe_image_analysis, filter_image):
         # Pad the image with zeros
         self.zeroPadImages(padSize)
 
-        print (self.im_PlasmaChannel.shape, self.ref_PlasmaChannel.shape)
+        if verbose: print (self.im_PlasmaChannel.shape, self.ref_PlasmaChannel.shape)
         
         # The refence has now been created
         self.refExists = True        
@@ -723,6 +715,8 @@ class phaseShift(probe_image_analysis, filter_image):
     def unwrap_phase(self, plotting = False):
         
         self.phase = unwrap_phase(self.phaseShift) 
+        # ## Make the phase positive
+        # self.phase -= self.phase.min()
         if plotting:
             self.plot_data(self.phase, cmap = 'jet')
 
@@ -730,7 +724,8 @@ class phaseShift(probe_image_analysis, filter_image):
 # From here adding to get the creation of fringes
 # =============================================================================
         
-    def crop_reference_fringes(self, channelPadding , xpad , ypad, safeRegion_Centre, plotting = False):
+    def crop_reference_fringes(self, channelPadding , xpad , ypad, safeRegion_Centre, plotting = False,
+        verbose = False):
         ''' Create a reference from the unperturbed region in the interferogram
         This needs to be same size as the actual image, so the fourier space
         treatment of it works.
@@ -748,7 +743,7 @@ class phaseShift(probe_image_analysis, filter_image):
         referenceOutline = np.array([bot, top, left, right]) * 1.0
         if plotting and self.refExists: 
             plt.title("Reference region")
-            print (bot, top, left, right, referenceOutline)
+            if verbose: print (bot, top, left, right, referenceOutline)
             self.draw_outline(bot, top, left, right)
             self.plot_data(self.im)
             
@@ -767,8 +762,9 @@ class phaseShift(probe_image_analysis, filter_image):
                            norm = func.MidpointNormalize(midpoint=0))
             plt.show()        
                 
-        print ('Reference Created')
-        print (bot, top, left, right, referenceOutline)
+        if verbose: 
+            print ('Reference Created')
+            print (bot, top, left, right, referenceOutline)
         return sgCrop , referenceOutline    
     
             
@@ -786,7 +782,7 @@ class phaseShift(probe_image_analysis, filter_image):
     def crop_to_ref(self, btlr, xr, yr, channelPadding, xpad , ypad):
         ''' Crop the reference image in the same way as the main image.
         '''
-        print ("crop_to_ref:: ", channelPadding, xpad , ypad)
+        # print ("crop_to_ref:: ", channelPadding, xpad , ypad)
         bot, top, left, right = self.check_btlr_coors_in_image(btlr, self.imShape)
         centeredReference = self.shift_centerofCrop_to_Centre(self.im, 
                                                         bot, top, left, right)   
@@ -849,8 +845,8 @@ class fourier_filter_for_Phasemask(probe_image_analysis):
             else:
                 peakDict[n] = False
                 
-        for n in peakDict:
-            print (n, peakDict[n])
+        # for n in peakDict:
+        #     print (n, peakDict[n])
             
         decisionMade = False
         if peakDict['max_peaks'] == False and peakDict['min_peaks'] != False:
@@ -936,7 +932,8 @@ if running as part of densityExtraction the top version needs to be commented ou
 # class phi_to_rho(loadInDataToNumpy, fourier_filter_for_Phasemask):
 class phi_to_rho(fourier_filter_for_Phasemask):
     def __init__(self):
-        print ("Creating phi_to_rho class")
+        # print ("Creating phi_to_rho class")
+        pass
     
     def fit_background(self, plotting = False):
         """ Fit the background.
@@ -1089,6 +1086,7 @@ class phi_to_rho(fourier_filter_for_Phasemask):
         image = self.phase.T
         
         # Using the inbuilt gaussian method to find the axis
+        print ("Inverse abel, outputs from PyAbel")
         self.inverse_abel = abel.Transform(image,
                                       #center = (50, 200),
                                       method =  method, 
@@ -1124,7 +1122,8 @@ class phi_to_rho(fourier_filter_for_Phasemask):
             ax[1].set_xlabel("Distance (mm)")
             plt.show()
 
-    def convert_Inverse_Abel_to_Ne(self, plotting = True, pixelsAroundPlasmaChannel = 10, perCm3 = True):
+    def convert_Inverse_Abel_to_Ne(self, plotting = True, pixelsAroundPlasmaChannel = 10, perCm3 = True,
+                            verbose = False):
         
         if perCm3: self.inverse_abel *= 1e-6
         
@@ -1134,7 +1133,7 @@ class phi_to_rho(fourier_filter_for_Phasemask):
         
         # Take an average cropping to the center, this could be cleverer
         
-        print ("Taking average lineout in region of size {}mm around axis".format(2 * pixelsAroundPlasmaChannel * self.sizePerPixel *1e3))
+        if verbose: print ("Taking average lineout in region of size {}mm around axis".format(2 * pixelsAroundPlasmaChannel * self.sizePerPixel *1e3))
         lineout_ave = np.average(self.n_e[self.phase.shape[0]//2 - pixelsAroundPlasmaChannel:
                                           self.phase.shape[0]//2 + pixelsAroundPlasmaChannel,
                                           :], 
@@ -1188,19 +1187,27 @@ class rhoExtraction(phi_to_rho, phaseShift):
 
 
     def extractDensityFromImages(self, loadPath, imFile, 
-                   pc_crop, FT_crop_coors, referenceFile, angle, referenceROIcentre, mPerPix, mask_percentage, paddingX, paddingY, padSize , blurSize
-                   ):
-
+                   pc_crop, FT_crop_coors, referenceFile, angle, referenceROIcentre, mPerPix, mask_percentage, paddingX, paddingY, padSize , blurSize,
+                   verbose , visualise ):
+        if verbose: print ("Loading in the data")
         self.load_data(loadPath, imFile, referenceFile,  blurSize = blurSize, plotting = False)
 
+        if verbose: print ("Cropping to the plasma channel")
         # Crop to the plasma channel
-        _ = self.cropToPlasmaChannel( pc_crop, plotting=False,
+        _ = self.cropToPlasmaChannel( pc_crop, plotting=visualise,
                                 paddingX=paddingX, paddingY=paddingY, # Padding on the crop
                                 padSize = padSize,
                                 centreCoorsOfFringeRegion = referenceROIcentre
                                )    
         self.fft_of_plasma(plotting = False)        
         
+        if verbose: 
+            print ("Cropping to the peak in F Space")
+            method =  len(FT_crop_coors) == 4
+            if method:
+                print ("Using crop coors in F space")
+            else:
+                print ("Searching for F Space crop")
         # There are two methods, one requires the peak to be properly located,
         # and the other uses the shape in F space to work out where to crop.
         if len(FT_crop_coors) == 4:    
@@ -1209,20 +1216,30 @@ class rhoExtraction(phi_to_rho, phaseShift):
         else:
             self.auto_select_FT_peak(yPercRange = 0.3, xPercRange = 0.25, plot_fft_space = False,
                                     plotting_cropping = False, plot_found_peaks = False)
-        
-        self.createPhase_inverseFT(plotting = False)
-        self.unwrap_phase(plotting = False)       
 
-        # self.phase = phase
-        self.create_mask(mask_percentage = 0.35)    
+        if verbose: print ("Creating Phase")
+        self.createPhase_inverseFT(plotting = False)
+        if verbose: print ("Unwrapping phase")
+        self.unwrap_phase(plotting = visualise)       
+
+        if verbose: print ("Creating a mask of the Plasma channel")
+        self.create_mask(mask_percentage = mask_percentage, 
+                    plotPhaseShift = visualise, plotMasks = visualise)    
+        if verbose: print ("Fitting the phase background")        
         self.fit_background(plotting=False)
 
-        print ("Input Angle ", angle)
+        if verbose:
+            print ("Rotating the channel to Horz")
+            print ("Input Angle ", angle)
         self.plasmaChannel_Horz(angle, plotting = False)
         self.constants(mPerPix)
+
+        if verbose: print ("Abel Inversion")
         self.inverse_abel_transform(plotting=False)
-        output = self.convert_Inverse_Abel_to_Ne(plotting=False)
-        print (type(output), len(output))
+        output = self.convert_Inverse_Abel_to_Ne(plotting=visualise)
+        if verbose:
+            print ("The outputs")
+            print (type(output), len(output))
         return output
 
     def display_pc_cropping(self, pc_crop_coors, centreCoorsOfFringeRegion):
@@ -1240,11 +1257,12 @@ class rhoExtraction(phi_to_rho, phaseShift):
         self.plot_data( self.im)
 
 
-def extract_plasma_density(data_file_s, calibrationData, analysisSavePath):
-    
-    # print ("files", data_file_s)
-    print ("len Files", len(data_file_s))
-    print ("len of cal data", len(calibrationData))
+def extract_plasma_density(data_file_s, calibrationData, analysisSavePath, 
+            verbose = False, visualise = False):
+    if verbose:
+        print ("files", data_file_s)
+        print ("len Files", len(data_file_s))
+        print ("len of cal data", len(calibrationData))
 
     refFile, cellChanging, cellOn, cellPC, cell_FCrop, nozzleOn, nozzlePC, nozzle_FCrop, angle, centreCoorsOfFringeRegion, mPerPix, mask_percentage, paddingX, paddingY, padSize, blurSize = calibrationData
 
@@ -1252,44 +1270,45 @@ def extract_plasma_density(data_file_s, calibrationData, analysisSavePath):
     assert type(cellOn) == bool            
     assert type(cellChanging) == bool
     assert len(calibrationData) == 16
-    print ("Input data recieved correctly")
-    print 
-    print ("\n\n")
+    if verbose: print ("Input data recieved correctly")
 
     loadPath = ''
     burstData = []
     for imFile in data_file_s:
-        print ("\n\n Analysis on {}\n".format(imFile))
+        print ("\n\nAnalysis on {}\n".format(imFile))
         rho = rhoExtraction()
         if cellOn:
             try:
-                print ("Extracting Cell")
+                # print ("Extracting Cell")
                 cellDensity = rho.extractDensityFromImages(loadPath, imFile, cellPC, cell_FCrop, refFile, angle, 
-                                centreCoorsOfFringeRegion, mPerPix, mask_percentage, paddingX, paddingY, padSize, blurSize) 
+                                centreCoorsOfFringeRegion, mPerPix, mask_percentage, paddingX, paddingY, padSize, blurSize, verbose, visualise) 
             except:
+                print ("\tFAILED: Cell Extraction")
                 cellDensity = ([], [])    
         else:
             cellDensity = ([], [])
 
         if nozzleOn:
             try:
-                print ("Extracting Nozzle")            
+                # print ("Extracting Nozzle")            
                 nozzleDensity = rho.extractDensityFromImages(loadPath, imFile, nozzlePC, nozzle_FCrop, refFile, angle, 
-                                centreCoorsOfFringeRegion, mPerPix, mask_percentage, paddingX, paddingY, padSize, blurSize) 
+                                centreCoorsOfFringeRegion, mPerPix, mask_percentage, paddingX, paddingY, padSize, blurSize, verbose, visualise) 
             except:
+                print ("\tFAILED: Nozzle Extraction")
                 nozzleDensity = ([], [])
         else:
             nozzleDensity = ([], [])    
         
         output = (nozzleDensity, cellDensity)
-        print (len(output))
         burstData.append(output)
-        print ("Save the data")
+        
         folderpath = analysisSavePath.split("Probe_Interferometry_Analysis")[0]
-        print (folderpath)
+        print ("Save the data: ", folderpath)
         func.check_and_makeFolder(folderpath)
-
-
         np.save(analysisSavePath.split(".")[0]  +  imFile.split(".")[0].split('Shot')[1] + '.npy', output)
 
     return burstData
+
+
+
+
