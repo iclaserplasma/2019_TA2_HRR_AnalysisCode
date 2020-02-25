@@ -264,7 +264,7 @@ class dataRun:
 	# -------------------------------------------------------------------------------------------------------------------
 
 	# PROBE ANALYSIS
-	def performProbeDensityAnalysis(self, ):
+	def performProbeDensityAnalysis(self, overwrite = True):
 		diag = 'Probe_Interferometry'
 		print ("In ", diag)
 
@@ -277,15 +277,21 @@ class dataRun:
 		
 		probeCalib = self.loadCalibrationData(diag)
 		for burstStr in filePathDict.keys():		
+			
 			analysisSavePath = os.path.join(analysisPath,burstStr,'{}_Analysis'.format(diag))
-			analysedData = probe_density_extraction.extract_plasma_density(
-								filePathDict[burstStr],probeCalib, analysisSavePath)
-			
-			
-			self.saveData(analysisSavePath,analysedData)
+			fileExists = os.path.isfile(analysisSavePath + '.npy')
+			print ("analysisSavePath: ", analysisSavePath)
+			print (fileExists)
 
-			self.logThatShit('Performed Probe_Interferometry Analysis for ' + burstStr)
-			print('Analysed Probe_Interferometry '+ burstStr)
+			if (overwrite == False and fileExists):
+				print ("File exists so not overwriting")
+			else:
+				analysedData = probe_density_extraction.extract_plasma_density(
+								filePathDict[burstStr],probeCalib, analysisSavePath)			
+				self.saveData(analysisSavePath,analysedData)
+
+				self.logThatShit('Performed Probe_Interferometry Analysis for ' + burstStr)
+				print('Analysed Probe_Interferometry '+ burstStr)
 
 	# ELECTRON ANALYSIS 
 	def performESpecAnalysis(self,useCalibration=True,overwriteData=False):
