@@ -20,12 +20,7 @@ import HASOAnalysis
 import ESpecAnalysis
 import PreCompNFAnalysis
 import XRayAnalysis 
-
-
-try:
-	import probe_density_extraction 
-except:
-	print('Cannot import probe_density_extraction')
+import probe_density_extraction 
 
 # HELPER FUNCTIONS - COULD BE PLACED ELSEWHERE?
 def getSortedFolderItems(itemPath,key):
@@ -264,7 +259,8 @@ class dataRun:
 	# -------------------------------------------------------------------------------------------------------------------
 
 	# PROBE ANALYSIS
-	def performProbeDensityAnalysis(self, overwrite = True):
+	def performProbeDensityAnalysis(self, overwrite = True, verbose = False, visualise = False, 
+				Debugging = False):
 		diag = 'Probe_Interferometry'
 		print ("In ", diag)
 
@@ -274,9 +270,12 @@ class dataRun:
 			os.makedirs(analysisPath)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
 		print (analysisPath, pathExists)
-		
 		probeCalib = self.loadCalibrationData(diag)
-		for burstStr in filePathDict.keys():		
+		folders = list(filePathDict)
+		# print(folders)
+		if Debugging:
+			folders = folders[:1]
+		for burstStr in folders:		
 			
 			analysisSavePath = os.path.join(analysisPath,burstStr,'{}_Analysis'.format(diag))
 			fileExists = os.path.isfile(analysisSavePath + '.npy')
@@ -287,7 +286,8 @@ class dataRun:
 				print ("File exists so not overwriting")
 			else:
 				analysedData = probe_density_extraction.extract_plasma_density(
-								filePathDict[burstStr],probeCalib, analysisSavePath)			
+								filePathDict[burstStr],probeCalib, analysisSavePath, 
+								verbose = verbose, visualise = visualise)			
 				self.saveData(analysisSavePath,analysedData)
 
 				self.logThatShit('Performed Probe_Interferometry Analysis for ' + burstStr)
