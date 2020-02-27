@@ -47,7 +47,7 @@ class xrayDeJiggler:
         self.bounds = bounds
         self.bkgImg = bkgImg
         self.flatImg = flatImg
-
+        self.imgComb =  None
         self.imgList = imgList
         if imgList is not None:
             self.Ny,self.Nx = np.shape(imgList[0])
@@ -190,23 +190,27 @@ class xrayDeJiggler:
             self.runImages = self.runImages +imgComb
         return self.runImages
 
-    def alignProcessedImgList(self,imgList):
+    def alignProcessedImgList(self,imgList,N_ref,n_start=0):
        
         N = len(imgList)
         x_rot=[]
         y_rot=[]
-        imgComb=[]
-        imgRef = None
-        buildRef = True
+        if self.imgComb is None:
+            self.imgComb=[]
+            imgRef = None
+        else:
+            self.imgComb = self.imgComb[:n_start]
+            imgRef = np.median(self.imgComb,axis=0)
+    
         mfSize = [3,3]
         corMfSize = mfSize[1]
         mfSize = mfSize[0]
-        for n in range(0,N):
+        for n in range(n_start,N):
             img = imgList[n]
             if imgRef is None:
                 imgRef = img
                 self.imgRef = imgRef
-                imgComb.append(img)
+                self.imgComb.append(img)
                 x_rot.append(0)
                 y_rot.append(0)
             else:
@@ -216,10 +220,10 @@ class xrayDeJiggler:
                 x_opt = self.findCenterByGP(img)
                 x_rot.append(int(x_opt[0]))
                 y_rot.append(int(x_opt[1]))
-                imgComb.append(shiftImage(img,x_opt))
-
-                imgRef = np.median(imgComb,axis=0)
-                self.imgRef = imgRef
+                self.imgComb.append(shiftImage(img,x_opt))
+                if n<N_ref:
+                    imgRef = np.median(self.imgComb,axis=0)
+                    self.imgRef = imgRef
         sys.stdout.flush()
         print('\r','Done')   
         
