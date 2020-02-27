@@ -190,6 +190,41 @@ class xrayDeJiggler:
             self.runImages = self.runImages +imgComb
         return self.runImages
 
+    def alignProcessedImgList(self,imgList):
+       
+        N = len(imgList)
+        x_rot=[]
+        y_rot=[]
+        imgComb=[]
+        imgRef = None
+        buildRef = True
+        mfSize = [3,3]
+        corMfSize = mfSize[1]
+        mfSize = mfSize[0]
+        for n in range(0,N):
+            img = imgList[n]
+            if imgRef is None:
+                imgRef = img
+                self.imgRef = imgRef
+                imgComb.append(img)
+                x_rot.append(0)
+                y_rot.append(0)
+            else:
+                sys.stdout.flush()
+                print(' Image: ', n+1, '/', N ,'...', end='\r')
+
+                x_opt = self.findCenterByGP(img)
+                x_rot.append(int(x_opt[0]))
+                y_rot.append(int(x_opt[1]))
+                imgComb.append(shiftImage(img,x_opt))
+
+                imgRef = np.median(imgComb,axis=0)
+                self.imgRef = imgRef
+        sys.stdout.flush()
+        print('\r','Done')   
+        
+        return imgComb, x_rot , y_rot
+
 
 
             
