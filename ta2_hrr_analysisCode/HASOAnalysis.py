@@ -10,6 +10,12 @@ from scipy.sparse import csr_matrix,coo_matrix
 from scipy.sparse.linalg import lsqr,lsmr
 from numpy import matlib as mb
 from scipy.interpolate import RegularGridInterpolator,griddata
+from math import factorial
+
+
+# 202-02-06 Edit: 	corrected error in creation of X and Y arrays in extractWavefrontInfo
+#				  	It would have incorrectly calculated dx by 2.5 %
+
 
 def splitHASOFile(filename):
     # Open file to read
@@ -61,8 +67,8 @@ def extractWavefrontInfo(dataFile,verbose=False):
 		intensityAsText = root[0][1][4][0].text
 		pupilAsText = root[0][1][5][0].text
 
-		X = np.linspace(-n*step/2,n*step/2-1,n)
-		Y = np.linspace(-m*step/2,m*step/2-1,m)
+		X = np.linspace(-n*step/2,n*step/2-step,n)
+		Y = np.linspace(-m*step/2,m*step/2-step,m)
 
 		if i == 0:
 			# Convert the text arrays to numpy arrays of floats
@@ -83,7 +89,8 @@ def extractWavefrontInfo(dataFile,verbose=False):
 		try:
 			os.remove('Pupil.xml')
 		except:
-			print('No Pupil.xml File Found to Delete')
+			print('No pupil.xml File Found to Delete')
+
 	xSlopes = xSlopes/numFiles
 	ySlopes = ySlopes/numFiles
 	intensity = intensity/numFiles
@@ -182,7 +189,8 @@ def getPupilCoords(X,Y,pupil):
 
 
 def intgrad2(fx,fy,X,Y,f00):
-	''' Converted to python from Matlab code by John D'Errico
+	''' Based on Matlab code by John D'Errico
+	Painully converted to Python by Rob Shalloo
 	 intgrad2: generates a 2-d surface, integrating gradient information.
 	 arguments: (input)
 	  fx,fy - (ny by nx) arrays, as gradient would have produced. fx and
@@ -328,11 +336,11 @@ def convertSlopesToPhase(X,Y,xSlopes,ySlopes,intensity,pupil):
 	Ny = 8*m
 
 	# Save this for regridding later
-	oldXRes = (X[-1]-X[0])/n
-	oldYRes = (Y[-1]-Y[0])/m
+	oldXRes = (X[-1]-X[0])/(n-1)
+	oldYRes = (Y[-1]-Y[0])/(m-1)
 
-	xRes = (X[-1]-X[0])/n/4
-	yRes = (Y[-1]-Y[0])/m/4
+	xRes = (X[-1]-X[0])/(n-1)/4
+	yRes = (Y[-1]-Y[0])/(m-1)/4
 	Xtmp = X
 	Ytmp = Y
 	(X,Y, xSlopes) = reGridData(Xtmp,Ytmp,xSlopes,xRes,yRes,Nx,Ny,verbose=False)
@@ -355,7 +363,7 @@ def convertSlopesToPhase(X,Y,xSlopes,ySlopes,intensity,pupil):
 	newPupil[np.where(RR > r)] = np.nan
 
 
-
+	# Stick a border around the edge of the image, we will interpolate to this!
 	xM = np.nanmean(xSlopes)
 	xSlopes[:,0] = xM
 	xSlopes[:,-1] = xM
@@ -368,6 +376,7 @@ def convertSlopesToPhase(X,Y,xSlopes,ySlopes,intensity,pupil):
 	ySlopes[0,:] = yM
 	ySlopes[-1,:] = yM
 
+	# Add a mask to the array and then interpolate the data using griddata
 	xSlopes = np.ma.masked_invalid(xSlopes)
 	x1 = x[~xSlopes.mask]
 	y1 = y[~xSlopes.mask]
@@ -428,15 +437,109 @@ def reGridData(x,y,dat,resX,resY,Nx,Ny,verbose=False):
     return (xNew,yNew, regriddedData)
 
 
-
-
 def zernike(X,Y,pupilCoords,j):
+	'''	
+	Calculate the Zernike Polynomials to arbitrary order.
+	Makes use of consructor formula on https://en.wikipedia.org/wiki/Zernike_polynomials
+	So far the first 100 have been tested for ortogonality and normalization
+	
+	X and Y are 1D arrays of the x and y direction
+	Pupil coords is the result of getPupilCoords
+	j is the index of the Zernike
+	'''
+
+	# Setup
+	(cgx,cgy,r) = pupilCoords
+	x,y = np.meshgrid(X,Y)
+	rho = np.sqrt((x-cgx)**2 + (y-cgy)**2)/r
+	theta = np.arctan2(y-cgy, x-cgx)
+
+	pupil = np.ones((len(Y),len(X)))
+	pupil[np.where(rho > 1) ] = np.nan
+
+	n,m = getZernikeNM(j)
+
+	# next get the radial part
+	R = RmnGenerator(abs(m),n,rho)
+
+	# Now multiply by the azimuthal part
+	if m < 0:
+		Z = R*np.sin(-m*theta)
+	else:
+		Z = R*np.cos(m*theta)
+
+	# Normalization
+	if n == 0:
+		scaling = 1
+	else:
+		if m == 0:
+			scaling = np.sqrt((n+1))
+		else:
+			scaling = np.sqrt(2*(n+1))
+	Z = Z*scaling
+
+
+	return Z*pupil
+
+def RmnGenerator(m,n,rho):
+	'''Generate the Radial part of the Zernike Polynomials
+	m,n integers non negative
+	rho a 2D array of values (positive)
+	'''
+	if n == 0:
+		try:
+			r, = rho.shape
+			Rmn = np.ones(r,)
+		except:
+			r,c = rho.shape
+			Rmn = np.ones((r,c))  
+	elif (n-m)%2 == 0:
+		# Even, Rmn is not 0
+		k = np.linspace(0,int((n-m)/2),int((n-m)/2) + 1).astype(int)
+		try:
+			r, = rho.shape
+			Rmn = np.zeros(r,)
+		except:
+			r,c = rho.shape
+			Rmn = np.zeros((r,c))  
+		for i in k:
+			Rmn = Rmn +  ((-1)**i * factorial(n-i)) / ( factorial(i)*factorial((n+m)/2-i)*factorial((n-m)/2-i) )  * rho**(n-2*i) 
+			
+	else:
+		try:
+			r, = rho.shape
+			Rmn = np.zeros(r,)
+		except:
+			r,c = rho.shape
+			Rmn = np.zeros((r,c))  
+	
+	Rmn[np.where(rho > 1)] = 0
+	return Rmn
+
+
+def getZernikeNM(zernikeIndx):
+	# numZernikes = 1/2*n*(n+1)+n+1
+	# First get the zernike order n
+	vals = np.roots((1/2,3/2,-zernikeIndx))
+	vals = np.amax(vals)
+	n = int(np.ceil(np.around(vals,decimals=5)))
+
+	# Now find the possible m values for this order
+	mVals = np.linspace(-n,n,n+1)
+
+	# now single out the correct m value
+	mInd = zernikeIndx - (1/2*(n-1)*(n)+n)  # here we're subtracting the zernikes from the previous orders and then subtracting one to create an index
+	m = int(mVals[int(mInd)])
+
+	return n,m
+
+def zernikeOld(X,Y,pupilCoords,j):
 	# Provides the required Zernike Polynomial
 	# Defined on the pupil.
 	# The zernike poynomial is indexed by j, with the following:
 	# j = {0:Piston, 1:YTilt, 2:XTilt, 3:ObliqueAstig, 4:Focus, 5:VerticalAstig,...
 	# 6:VerticalTrefoil, 7:VerticalComa, 8:HorizontalComa, 9:ObliqueTrefoil}
-	# Currently, we're only using the first 10
+	# Currently, we're only using the first 36
 
 	# X and Y are 1D arrays of the x and y direction
 	# Pupil coords is the result of getPupilCoords
@@ -580,7 +683,7 @@ def zernike(X,Y,pupilCoords,j):
 		
 	return zMode*pupil
 
-def getZernikeCoefficients(X,Y,pupil,phase):
+def getZernikeCoefficients(X,Y,pupil,phase,numZernikes=36):
 	''' Find the zernike coefficients for the phase profile'''
     
 	pupilCoords = getPupilCoords(X,Y,pupil)
@@ -588,8 +691,8 @@ def getZernikeCoefficients(X,Y,pupil,phase):
 	dx = (X[1]-X[0])/r
 	dy = (Y[1]-Y[0])/r
 
-	zList = np.zeros(36,)
-	for i in range(36):
+	zList = np.zeros(numZernikes,)
+	for i in range(numZernikes):
 		Zj = zernike(X,Y,pupilCoords,i)
 		Zj[np.isnan(Zj)]=0
 		phase[np.isnan(phase)]=0
@@ -621,9 +724,36 @@ def createReference(inChamberHas,leakageHas):
 	
 	We need to be careful here, because there is no guarantee they are the same beam size
 	To make things simpler we could simply add the zernike modes...rather than regridding the
-	wavefront'''
+	wavefront
+	
+	In creating this reference, we need to perform some transformations on the In Chamber HASO to
+	correctly align it with the out of chamber HASO.
+
+	By Robs calculation: from just before the leakage splitter to the in chamber HASO there are
+	- 7 in plane reflections: Flips beam horizontally
+	- 1 turning periscope: Rotates beam counter clockwise by 90 degrees (as viewed head on)
+	- 1 keplerian telescope: Center transform of beam.
+
+	And from just before the leakage split to the leakage HASO there are:
+	- 7 in plane reflections: Flips beam horizontally
+	- 1 keplerian telescope: Center transform of beam.
+
+	Thus the beams are simply offset by 90 degrees. As viewed on the camera, this 90 degree offset
+	introduced by the turning periscope should be clockwise as seen on the CCD. Thus a 90 degree anti
+	clockwise transform is to be performed on the in chamber HASO phase to match it up
+	'''
 
 	(XIC,YIC,phaseIC,intensityIC,pupilIC,pupilCoordsIC,zernikeCoeffsIC) = extractWavefrontInfo(inChamberHas)
+	
+	# need to rotate the phase nd pupil by 90 degreees clockwise
+	phaseIC_rot = np.rot90(phaseIC,k=3)
+	pupilIC_rot = np.rot90(pupilIC,k=3)
+
+	# Now get zernike list. Note we've swaped X and Y axis as the image has been rotated by 90 degrees
+	zernikeCoeffsIC_rot,pupilCoordIC_rot = getZernikeCoefficients(YIC,XIC,pupilIC_rot,phaseIC_rot)
+
+
+	# Now import the 
 	(XLK,YLK,phaseLK,intensityLK,pupilLK,pupilCoordsLK,zernikeCoeffsLK) = extractWavefrontInfo(leakageHas)
 
-	return zernikeCoeffsIC-zernikeCoeffsLK
+	return zernikeCoeffsIC_rot-zernikeCoeffsLK

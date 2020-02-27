@@ -7,7 +7,7 @@
     /    |   /   |  |\ | ||_
    /____ |__/\ . |  | \|_|\_|
    __________________________ .
-Created on 29/01/2020, 18:12:16
+Modified on 25/02/2020, 13:10:52
 @author: chrisunderwood
 """
 import numpy as np
@@ -16,8 +16,6 @@ mpl.rcParams['figure.figsize'] = [8.0,6.0]
 import matplotlib.pyplot as plt
 
 # Load my module of functions
-import sys
-sys.path.insert(0, '/Users/chrisunderwood/Documents/Python/')
 import CUnderwood_Functions3 as func
 
 # Module to import
@@ -92,7 +90,7 @@ class filter_image(loadInDataToNumpy):
         self.im_gblur = ndimage.gaussian_filter(arr,
                   sigma=(sigSize, sigSize), order=0)
 
-        print( type(arr), type(self.im_gblur))
+        # print( type(arr), type(self.im_gblur))
 
         if plotting:
             plt.imshow(self.im_gblur, 
@@ -103,6 +101,17 @@ class filter_image(loadInDataToNumpy):
             
         self.im = np.array(arr - self.im_gblur, 
                            dtype = float)
+        # Filter the reference file as well,
+        # Only do this if the reference is the same size as the image,
+        # as this means it is also just been directly loaded from file.
+        if hasattr(self, 'ref'):
+            if hasattr(self, 'refSameSize'):
+                if self.refSameSize:
+                    ref_gblur = ndimage.gaussian_filter(self.ref,
+                          sigma=(sigSize, sigSize), order=0)
+                    self.ref = np.array(arr - self.im_gblur, 
+                           dtype = float)
+
         
     def sub_blurredIm(self, btlr, plotting = True):
         """ Subtract the blurred image from the raw image.
@@ -245,7 +254,7 @@ class probe_image_analysis():
                                      power = 8):
         """ Create a window to crop in fourier space with
         """
-        print ("Creating Gaussian To Crop. Image shape", np.shape(image))
+        # print ("Creating Gaussian To Crop. Image shape", np.shape(image))
         bot, top, left, right = btlr
         cropGaussian = np.zeros_like(image, dtype = float)
 
@@ -253,11 +262,22 @@ class probe_image_analysis():
         sgY = self.superGaussian(np.arange(s[1]), (left + right)*0.5, abs(right-left), power)
         sgX = self.superGaussian(np.arange(s[0]), (top + bot)*0.5, abs(top - bot), power)    
 
-        for i, x in enumerate(sgX):
-            for j, y in enumerate(sgY):
-                cropGaussian[i][j] = x * y
+        yMask = sgY > 0.005
+        xMask = sgX > 0.005
+        xIndexs = []
+        yIndexs = []
+        for i, x in enumerate(xMask):
+            if x:
+                xIndexs.append(i)
+        for i, y in enumerate(yMask):
+            if y:
+                yIndexs.append(i)       
+        # Just use region of gaussians where the peak is large enough
+        for i in xIndexs:
+            for j in yIndexs:
+                cropGaussian[i][j] = sgX[i] * sgY[j]         
+        # print ("\t\tOutput shape of crop:" ,np.shape(cropGaussian))
     
-        cropGaussian = np.real(cropGaussian)
         return cropGaussian        
     
     def rotate_array(self, arr, angleDeg):
@@ -271,7 +291,7 @@ class probe_image_analysis():
 
 class phaseShift(probe_image_analysis, filter_image):   
     def __init__(self, power = 6):
-        print ("Creating phaseShift class")
+        # print ("Creating phaseShift class")
         self.gausPower = 2*power
 
         
@@ -327,7 +347,8 @@ class phaseShift(probe_image_analysis, filter_image):
         if plotting:
             self.plot_raw_input()
     
-    def load_data(self, loadPath, imFile, refFile = None, plotting = False):
+    def load_data(self, loadPath, imFile, refFile = None, blurSize = 35, plotting = False,
+        plottingBlurring = False):
         """ Load data into the class from file
         """        
         
@@ -358,6 +379,9 @@ class phaseShift(probe_image_analysis, filter_image):
             self.refExists = False
         if plotting:
             self.plot_raw_input()        
+        if imFile.split('.')[-1] in ['tiff', 'TIFF']:
+            # Removing the background by subtracting a blurred version of the image
+            self.blur(blurSize, plottingBlurring)                             
             
     def zeroPadImages(self, padSize = 100):
         """ Pads an image with zeros
@@ -383,7 +407,7 @@ class phaseShift(probe_image_analysis, filter_image):
         
         
     
-    def cropToPlasmaChannel(self, pc_crop_coors, plotting = False, 
+    def cropToPlasmaChannel(self, pc_crop_coors, plotting = False, plot_crop_result = False,
                             paddingX = 30, paddingY = 10, 
                             padSize = 100, centreCoorsOfFringeRegion = [500, 200],
                             verbose = False):
@@ -394,7 +418,7 @@ class phaseShift(probe_image_analysis, filter_image):
         
         """     
         bot, top, left, right = self.check_btlr_coors_in_image(pc_crop_coors, self.imShape)
-
+        self.PlasmaStartCoors = int(left)
         # # Find the range and centres of the box marking the PC
         self.pc_xsize = (right-left)
         self.pc_ysize = (top-bot)
@@ -416,13 +440,15 @@ class phaseShift(probe_image_analysis, filter_image):
         
         if self.refExists:
             if self.refSameSize:
-                print ("Ref is same size as crop region")
+                if verbose: print ("Ref is same size as crop region")
                 self.ref_PlasmaChannel = self.ref * gaus_cropping
             else:
+                if verbose: print ("Ref is a different size to the crop region")
                 self.cropCentreOfRef_DiffShape(self.padSize, self.paddingX, self.paddingY)
-                plt.title("Smaller reference cropped")
-                self.plot_data(self.ref_PlasmaChannel)
-                print (self.ref_PlasmaChannel.shape)
+                if plotting:
+                    plt.title("Smaller reference cropped")
+                    self.plot_data(self.ref_PlasmaChannel)
+                    if verbose: print (self.ref_PlasmaChannel.shape)
         else:
             # Use a region where the fringes are unperturbed as the reference
             _, referenceOutline = self.crop_reference_fringes(self.padSize, self.paddingX, self.paddingY, 
@@ -450,12 +476,12 @@ class phaseShift(probe_image_analysis, filter_image):
         # Pad the image with zeros
         self.zeroPadImages(padSize)
 
-        print (self.im_PlasmaChannel.shape, self.ref_PlasmaChannel.shape)
+        if verbose: print (self.im_PlasmaChannel.shape, self.ref_PlasmaChannel.shape)
         
         # The refence has now been created
         self.refExists = True        
         
-        if plotting:
+        if plot_crop_result:
             plt.clf()
             print ("Plotting the raw images cropped with a window")
             plt.title("Raw image with Gauss window applied and padding")
@@ -689,6 +715,8 @@ class phaseShift(probe_image_analysis, filter_image):
     def unwrap_phase(self, plotting = False):
         
         self.phase = unwrap_phase(self.phaseShift) 
+        # ## Make the phase positive
+        # self.phase -= self.phase.min()
         if plotting:
             self.plot_data(self.phase, cmap = 'jet')
 
@@ -696,7 +724,8 @@ class phaseShift(probe_image_analysis, filter_image):
 # From here adding to get the creation of fringes
 # =============================================================================
         
-    def crop_reference_fringes(self, channelPadding , xpad , ypad, safeRegion_Centre, plotting = False):
+    def crop_reference_fringes(self, channelPadding , xpad , ypad, safeRegion_Centre, plotting = False,
+        verbose = False):
         ''' Create a reference from the unperturbed region in the interferogram
         This needs to be same size as the actual image, so the fourier space
         treatment of it works.
@@ -714,7 +743,7 @@ class phaseShift(probe_image_analysis, filter_image):
         referenceOutline = np.array([bot, top, left, right]) * 1.0
         if plotting and self.refExists: 
             plt.title("Reference region")
-            print (bot, top, left, right, referenceOutline)
+            if verbose: print (bot, top, left, right, referenceOutline)
             self.draw_outline(bot, top, left, right)
             self.plot_data(self.im)
             
@@ -733,8 +762,9 @@ class phaseShift(probe_image_analysis, filter_image):
                            norm = func.MidpointNormalize(midpoint=0))
             plt.show()        
                 
-        print ('Reference Created')
-        print (bot, top, left, right, referenceOutline)
+        if verbose: 
+            print ('Reference Created')
+            print (bot, top, left, right, referenceOutline)
         return sgCrop , referenceOutline    
     
             
@@ -752,7 +782,7 @@ class phaseShift(probe_image_analysis, filter_image):
     def crop_to_ref(self, btlr, xr, yr, channelPadding, xpad , ypad):
         ''' Crop the reference image in the same way as the main image.
         '''
-        print ("crop_to_ref:: ", channelPadding, xpad , ypad)
+        # print ("crop_to_ref:: ", channelPadding, xpad , ypad)
         bot, top, left, right = self.check_btlr_coors_in_image(btlr, self.imShape)
         centeredReference = self.shift_centerofCrop_to_Centre(self.im, 
                                                         bot, top, left, right)   
@@ -793,17 +823,94 @@ class phaseShift(probe_image_analysis, filter_image):
 class fourier_filter_for_Phasemask(probe_image_analysis):
     def TakeImage(self, phi):
         self.phase = phi
-    
-    def create_mask(self, x = 0.9, y = 0.9, mask_percentage = 0.5):
         
+    def correctPhaseShiftSign(self, plotting = True):
+        
+        from peakdetect import peakdetect
+        l = np.average(self.phase,axis=1)
+        l -= np.average(l)  # attempt to set around zero
+        max_peaks, min_peaks = np.array(peakdetect(l, lookahead= len(l) // 6))
+        peaks = [max_peaks, min_peaks]
+        peakDict = {}
+        for p, n in zip( [max_peaks, min_peaks], ["max_peaks", "min_peaks"]) :
+            if len(p) > 0:
+                x, y = zip(*p)
+                if len(x) > 1:
+                    y = np.array(y)
+                    ind = func.nearposn(abs(y), max(abs(y)) )
+                    x = (x[ind],)
+                    y = (y[ind],)
+                
+                peakDict[n] = [x,y]
+            else:
+                peakDict[n] = False
+                
+        # for n in peakDict:
+        #     print (n, peakDict[n])
+            
+        decisionMade = False
+        if peakDict['max_peaks'] == False and peakDict['min_peaks'] != False:
+            print ("Need to invert")
+            invert = -1
+            decisionMade = True
+        if peakDict['min_peaks'] == False and peakDict['max_peaks'] != False :
+            print ("Need to remain the same invert")            
+            invert = 1
+            decisionMade = True
+            
+        if decisionMade:
+            self.phase = self.phase * invert       
+            print ("The phase in the correct orientation")
+            if plotting:
+                plt.title("Correct Sign Phase shift")
+                plt.imshow(self.phase)
+                plt.colorbar()
+                plt.show()
+        else:
+            
+            if plotting:
+                plt.figure(figsize=(6,4))
+                plt.title("y lineout of phase, with found peaks")
+                plt.plot(l)
+            peaks = []
+            for n in peakDict:
+                peaks.append(peakDict[n])
+            print (peaks)
+            # print (np.shape(peaks) )
+            # if len(np.shape(peaks)) == 3:
+            #     s = np.shape(peaks)
+            #     peaks = np.array(peaks).reshape( s[0], s[2])
+            peaks = np.array(peaks)
+            
+            if plotting:
+                plt.plot(peaks[:,0], peaks[:,1], 's')
+                plt.show()
+            ind = np.where(abs(peaks[:,1]) == max(abs(peaks[:,1])))[0][0]
+            if peaks[ind][1] < 0:
+                print ("Inverting the phase, multiple peaks found.")
+                self.phase = self.phase * -1
+                if plotting:
+                    plt.title("Correct Sign Phase shift")
+                    plt.imshow(self.phase)
+                    plt.colorbar()
+                    plt.show()
+            
+        
+        
+    
+    def create_mask(self, x = 0.9, y = 0.9, mask_percentage = 0.5, plotPhaseShift = False, 
+                    plotMasks = False):
+        self.correctPhaseShiftSign(plotPhaseShift)
         self.F_image= np.fft.fft(self.phase)
         self.crop_in_fourier_space(x, y)
         self.filtered_image = np.fft.ifft(self.F_image)
         self.norm_filter = func.normaliseArr(np.real(self.filtered_image))
-        self.mask = self.norm_filter < mask_percentage
-        self.antimask = self.norm_filter > mask_percentage
-        
-        self.bg = self.mask * self.phase
+        self.mask_bgTrue = self.norm_filter < mask_percentage
+        self.mask_pcTrue = self.norm_filter > mask_percentage
+
+        if plotMasks:
+            self.showMasks()        
+        self.bg = self.mask_bgTrue * self.phase
     
     def crop_in_fourier_space(self, x = 0.5, y = 0.5):
         y = int(self.phase.shape[0]//2 * y)
@@ -825,13 +932,15 @@ if running as part of densityExtraction the top version needs to be commented ou
 # class phi_to_rho(loadInDataToNumpy, fourier_filter_for_Phasemask):
 class phi_to_rho(fourier_filter_for_Phasemask):
     def __init__(self):
-        print ("Creating phi_to_rho class")
+        # print ("Creating phi_to_rho class")
+        pass
     
     def fit_background(self, plotting = False):
         """ Fit the background.
         Fit a 2D plane and subtract
         """
-        # self.bg = np.ma.array(self.phase, mask = self.mask)
+        # self.bg = np.ma.array(self.phase, mask = self.mask_bgTrue)
+   
         m = self.phase.shape[0]
         n = self.phase.shape[1]
         X1, X2 = np.mgrid[:m, :n]    
@@ -854,7 +963,7 @@ class phi_to_rho(fourier_filter_for_Phasemask):
         
             plt.imshow(self.phase - self.bg_plane, norm = func.MidpointNormalize(midpoint = 0),
                        cmap = plt.cm.seismic)    
-            plt.plot(self.pc_centres[:,0], self.pc_centres[:,1], "o-g", lw = 2)
+            # plt.plot(self.pc_centres[:,0], self.pc_centres[:,1], "o-g", lw = 2) # DOESN'T EXIST
             plt.colorbar()
             plt.show()
         self.phase_with_bg = self.phase
@@ -869,36 +978,66 @@ class phi_to_rho(fourier_filter_for_Phasemask):
             ax[1].set_title("Background plane fitted")            
             plt.show()
             
+    def showMasks(self):
+        f, ax = plt.subplots(ncols = 2, sharex = True, sharey = True)
+        ax[0].imshow(self.mask_bgTrue)
+        ax[1].imshow(self.mask_pcTrue)
+        ax[0].set_title("mask, background")
+        ax[1].set_title("mask, PC")        
+        plt.show()
+        
+        
     def find_PC_angle(self, plotting = False):
         ''' Rotated the plasma channel so it is level.
         '''        
-        phaseShift = self.phase * self.antimask
+        phaseShift = self.phase * self.mask_pcTrue
+        
     
         indexes = []
         for i, col in enumerate(phaseShift.T):
-            ind = find_peaks(col, height=phaseShift.max() * 0.8, distance= 15)
-            if len(ind) == 2:
-                if len(ind[0]) == 1:
-                    indexes.append( [ i, ind[0][0]] )
+            if False:
+                # option 1
+                ind = find_peaks(col, height=phaseShift.max() * 0.8, distance= 15)
+                # print (ind)
+                if len(ind) == 2:
+                    if len(ind[0]) == 1:
+                        indexes.append( [ i, ind[0][0]] )
+            else:
+                # # option 2
+                import peakutils
+                ind = peakutils.indexes(col, thres=0.02/max(col), min_dist=30)
+                if len(ind) == 1:
+                    indexes.append([i, ind[0]])
+
         indexes = np.array( indexes )    
+        print (len(indexes))
+        if len(indexes) < 3:
+            plt.imshow(phaseShift)
+            plt.colorbar()
+            plt.show()
+            assert False
         popt, pcov = curve_fit(func.lin, indexes[:,0], indexes[:,1], p0 = [0, np.average(indexes[:,1])] )
         if plotting:        
             plt.plot(indexes[:,0], indexes[:,1])
             plt.imshow(phaseShift)
             plt.colorbar()
-            plt.plot(indexes[:,0], func.lin(indexes[:,0], *popt))    
+            plt.plot(indexes[:,0], func.lin(indexes[:,0], *popt), 'o-')    
             plt.show()
         
+        self.centerOfPlasmaChannel = indexes
         self.angle  = np.rad2deg(np.arctan(popt[0]))
-        print ("Angle from horozontal", self.angle)
+        print ("Angle from horizontal", self.angle)
         # return self.angle
             
-    def plasmaChannel_Horz(self, plotting = False):
-        self.find_PC_angle()
+    def plasmaChannel_Horz(self, angle = None,  plotting = False, cropToImage = False):
+        if angle is not None:
+            self.angle = angle
+        else:
+            self.find_PC_angle(plotting)
         pInit = self.phase
         self.phase = self.rotate_array(self.phase, self.angle)
         self.phase_rot_mask = self.rotate_array(np.ones_like(self.phase), self.angle)
-        self.phase_rot_mask_mask = self.rotate_array(np.array(self.antimask, dtype = float), self.angle)
+        self.phase_rot_mask_mask = self.rotate_array(np.array(self.mask_pcTrue, dtype = float), self.angle)
         
         # Crop to the plasma channel where the rotation is not effecting the result
         lineout = self.phase_rot_mask_mask.sum(axis = 0)
@@ -907,20 +1046,25 @@ class phi_to_rho(fourier_filter_for_Phasemask):
             if p:
                 ind = ind + 1
                 break
-        if plotting and False:
+        if plotting and cropToImage:
             plt.plot(lineout)
             l, h = plt.ylim()
             plt.vlines(ind, l, h)
             plt.show()
-        self.phase = self.phase[:, ind:]
+        if cropToImage:
+            self.phase = self.phase[:, ind:]
 
         if plotting:
             f, ax = plt.subplots(ncols = 2)
             ax[0].imshow(pInit)
+            if hasattr(self, "centerOfPlasmaChannel"):
+                ax[0].plot(self.centerOfPlasmaChannel[:,0], self.centerOfPlasmaChannel[:,1],
+                        'o-r')
             ax[1].imshow(self.phase)
             ax[0].set_title("Initial")
             ax[1].set_title("Rotated to PC horz")
             plt.show()        
+        return self.angle
         
     def constants(self, mPerPix, laserwavelength_m = 800e-9):
         self.lambda_l = laserwavelength_m
@@ -942,6 +1086,7 @@ class phi_to_rho(fourier_filter_for_Phasemask):
         image = self.phase.T
         
         # Using the inbuilt gaussian method to find the axis
+        print ("Inverse abel, outputs from PyAbel")
         self.inverse_abel = abel.Transform(image,
                                       #center = (50, 200),
                                       method =  method, 
@@ -950,9 +1095,16 @@ class phi_to_rho(fourier_filter_for_Phasemask):
                                       direction='inverse', verbose = True).transform.T        
             
         if plotting:
+            if hasattr(self, "PlasmaStartCoors"):
+                offset = self.PlasmaStartCoors
+            else: 
+                offset = 0
+            lineout_ave = np.average(self.inverse_abel[ 10:-10, :], axis = 0)
+            xAxis = np.arange(offset, offset + len(lineout_ave)) * self.sizePerPixel * 1e3            
+
             f, ax = plt.subplots(nrows = 2, figsize = (6,6), sharex = True)            
             im1 = ax[0].pcolormesh( 
-                    np.arange(self.phase.shape[1]) * self.sizePerPixel *1e3,
+                    xAxis,
                     np.arange(self.phase.shape[0]) * self.sizePerPixel *1e3 - self.phase.shape[0] * 0.5 * self.sizePerPixel *1e3,
                     self.inverse_abel, 
                     cmap = plt.cm.seismic, 
@@ -965,13 +1117,13 @@ class phi_to_rho(fourier_filter_for_Phasemask):
             ax[0].set_xlabel("Pixels")
             ax[0].set_ylabel("Pixels")        
             
-            lineout_ave = np.average(self.inverse_abel[ 10:-10, :], axis = 0)
-            
-            ax[1].plot(np.arange(len(lineout_ave)) * self.sizePerPixel * 1e3, lineout_ave)
+
+            ax[1].plot(xAxis, lineout_ave)
             ax[1].set_xlabel("Distance (mm)")
             plt.show()
 
-    def convert_Inverse_Abel_to_Ne(self, plotting = True, pixelsAroundPlasmaChannel = 10, perCm3 = True):
+    def convert_Inverse_Abel_to_Ne(self, plotting = True, pixelsAroundPlasmaChannel = 10, perCm3 = True,
+                            verbose = False):
         
         if perCm3: self.inverse_abel *= 1e-6
         
@@ -981,27 +1133,31 @@ class phi_to_rho(fourier_filter_for_Phasemask):
         
         # Take an average cropping to the center, this could be cleverer
         
-        print ("Taking average lineout in region of size {}mm around axis".format(2 * pixelsAroundPlasmaChannel * self.sizePerPixel *1e3))
+        if verbose: print ("Taking average lineout in region of size {}mm around axis".format(2 * pixelsAroundPlasmaChannel * self.sizePerPixel *1e3))
         lineout_ave = np.average(self.n_e[self.phase.shape[0]//2 - pixelsAroundPlasmaChannel:
                                           self.phase.shape[0]//2 + pixelsAroundPlasmaChannel,
                                           :], 
                                  axis = 0)
+        if hasattr(self, "PlasmaStartCoors"):
+            offset = self.PlasmaStartCoors
+        else: 
+            offset = 0        
+        xAxis = np.arange(offset, offset + self.phase.shape[1]) * self.sizePerPixel *1e3
+        yAxis = np.arange(self.phase.shape[0]) * self.sizePerPixel *1e3 - self.phase.shape[0] * 0.5 * self.sizePerPixel *1e3            
         if plotting:
             f, ax = plt.subplots(nrows=2, sharex = True, figsize = (8,6))
             ax[0].set_title("Number Density")
-            im1 = ax[0].pcolormesh( 
-                    np.arange(self.phase.shape[1]) * self.sizePerPixel *1e3,
-                    np.arange(self.phase.shape[0]) * self.sizePerPixel *1e3 - self.phase.shape[0] * 0.5 * self.sizePerPixel *1e3,
-                    self.n_e, cmap = plt.cm.seismic,
+            
+            im1 = ax[0].pcolormesh( xAxis, yAxis, self.n_e, cmap = plt.cm.seismic,
                     norm = func.MidpointNormalize(midpoint = 0) )
             
             for height in  [-pixelsAroundPlasmaChannel,  pixelsAroundPlasmaChannel]:
                 # print (self.phase.shape, height)
-                ax[0].hlines(height * self.sizePerPixel *1e3, 0, self.phase.shape[1]* self.sizePerPixel *1e3)
+                ax[0].hlines(height * self.sizePerPixel *1e3, xAxis[0], xAxis[-1])
             
             cax = f.add_axes([0.95, 0.25, 0.05, 0.5])
             plt.colorbar(im1, cax = cax)
-            ax[1].plot(np.arange(len(lineout_ave)) * self.sizePerPixel *1e3, lineout_ave)
+            ax[1].plot( xAxis , lineout_ave)
             ax[1].set_xlabel("Distance (mm)")
             # ax[1].set_ylim([0, None])
             if perCm3:
@@ -1012,7 +1168,10 @@ class phi_to_rho(fourier_filter_for_Phasemask):
                 ax[1].set_ylabel("Plasma Density ($m^{-3}$)")
             plt.show()        
             
-        return self.n_e, np.c_[np.arange(len(lineout_ave)) * self.sizePerPixel *1e3, lineout_ave]
+        # Returns two arrays
+        # -- 2D Data: the x and y axis, the electron density, the phase shift
+        # -- 1D Data: the lineout of n_e through the cell/nozzle
+        return (xAxis, yAxis, self.n_e, self.phase), np.c_[np.arange(len(lineout_ave)) * self.sizePerPixel *1e3, lineout_ave]
         
         
         
@@ -1020,68 +1179,135 @@ class phi_to_rho(fourier_filter_for_Phasemask):
 
 
 class rhoExtraction(phi_to_rho, phaseShift):
-    def __init__(self, **kwargs):
-        # phi_to_rho.__init__(**kwargs)
-        pass
+    def __init__(self, gpower = 6,  **kwargs):
+        phi_to_rho.__init__(self,**kwargs)
+        phaseShift.__init__(self, **kwargs)
+        self.gausPower = gpower
+        
 
 
     def extractDensityFromImages(self, loadPath, imFile, 
-                   cellOn, cellPC, cellFCrop, cellChanging,
-                   nozzleOn, nozzlePC, nozzleFCrop,
-                   referenceFile, referenceROIcentre
-                   ):
+                   pc_crop, FT_crop_coors, referenceFile, angle, referenceROIcentre, mPerPix, mask_percentage, paddingX, paddingY, padSize , blurSize,
+                   verbose , visualise ):
+        if verbose: print ("Loading in the data")
+        self.load_data(loadPath, imFile, referenceFile,  blurSize = blurSize, plotting = False)
 
-        self.load_data(loadPath, imFile, referenceFile,  plotting = False)
-        if imFile.endswith('TIFF'):
-            # Removing the background by subtracting a blurred version of the image
-            self.blur(35,plotting = False)    
-            
+        if verbose: print ("Cropping to the plasma channel")
         # Crop to the plasma channel
-        _ = self.cropToPlasmaChannel( pc_crop_coors, plotting=True,
-                                paddingX=20, paddingY=20, # Padding on the crop
-                                # Extra pad  y      x
-                                # padSize = [(10, ), (10, )]
-                                padSize = 10,
-                                centreCoorsOfFringeRegion = [500, 200]
+        _ = self.cropToPlasmaChannel( pc_crop, plotting=visualise,
+                                paddingX=paddingX, paddingY=paddingY, # Padding on the crop
+                                padSize = padSize,
+                                centreCoorsOfFringeRegion = referenceROIcentre
                                )    
         self.fft_of_plasma(plotting = False)        
         
+        if verbose: 
+            print ("Cropping to the peak in F Space")
+            method =  len(FT_crop_coors) == 4
+            if method:
+                print ("Using crop coors in F space")
+            else:
+                print ("Searching for F Space crop")
         # There are two methods, one requires the peak to be properly located,
         # and the other uses the shape in F space to work out where to crop.
-        if False:    
+        if len(FT_crop_coors) == 4:    
             self.crop_to_FFT_peak(FT_crop_coors, plot_crop_window_and_peak=False,
                                  plot_fft_space = False)
         else:
             self.auto_select_FT_peak(yPercRange = 0.3, xPercRange = 0.25, plot_fft_space = False,
                                     plotting_cropping = False, plot_found_peaks = False)
-        
-        self.createPhase_inverseFT(plotting = False)
-        self.unwrap_phase(plotting = False)       
 
-        # self.phase = phase
-        self.create_mask(mask_percentage = 0.35)    
+        if verbose: print ("Creating Phase")
+        self.createPhase_inverseFT(plotting = False)
+        if verbose: print ("Unwrapping phase")
+        self.unwrap_phase(plotting = visualise)       
+
+        if verbose: print ("Creating a mask of the Plasma channel")
+        self.create_mask(mask_percentage = mask_percentage, 
+                    plotPhaseShift = visualise, plotMasks = visualise)    
+        if verbose: print ("Fitting the phase background")        
         self.fit_background(plotting=False)
 
-        self.plasmaChannel_Horz(plotting = True)
-        self.constants(mPerPix = 4.98107e-06)
-        self.inverse_abel_transform(plotting=True)
-        output = self.convert_Inverse_Abel_to_Ne()
-        print (type(output), len(output))
+        if verbose:
+            print ("Rotating the channel to Horz")
+            print ("Input Angle ", angle)
+        self.plasmaChannel_Horz(angle, plotting = False)
+        self.constants(mPerPix)
+
+        if verbose: print ("Abel Inversion")
+        self.inverse_abel_transform(plotting=False)
+        output = self.convert_Inverse_Abel_to_Ne(plotting=visualise)
+        if verbose:
+            print ("The outputs")
+            print (type(output), len(output))
         return output
 
+    def display_pc_cropping(self, pc_crop_coors, centreCoorsOfFringeRegion):
+        b,t,l,r = pc_crop_coors
+        xc, yc = centreCoorsOfFringeRegion
+        pc_xsize = r - l
+        pc_ysize = t - b 
+        left = xc - pc_xsize // 2
+        right = xc + pc_xsize // 2
+        bot = yc - pc_ysize // 2
+        top = yc + pc_ysize // 2        
+
+        self.draw_outline(b,t,l,r, color = 'red') # PLASMA CHANNEL
+        self.draw_outline(bot,top,left,right, color = 'blue')
+        self.plot_data( self.im)
 
 
+def extract_plasma_density(data_file_s, calibrationData, analysisSavePath, 
+            verbose = False, visualise = False):
+    if verbose:
+        print ("files", data_file_s)
+        print ("len Files", len(data_file_s))
+        print ("len of cal data", len(calibrationData))
 
-def extract_plasma_density(data_file_s, calibrationData):
-    
-    cellOn, cellPC, cellFCrop, cellChanging,  nozzleOn, nozzlePC, nozzleFCrop, referenceFile, referenceROIcentre = calibrationData
+    refFile, cellChanging, cellOn, cellPC, cell_FCrop, nozzleOn, nozzlePC, nozzle_FCrop, angle, centreCoorsOfFringeRegion, mPerPix, mask_percentage, paddingX, paddingY, padSize, blurSize = calibrationData
+
     assert type(nozzleOn) == bool
     assert type(cellOn) == bool            
     assert type(cellChanging) == bool
+    assert len(calibrationData) == 16
+    if verbose: print ("Input data recieved correctly")
 
+    loadPath = ''
+    burstData = []
+    for imFile in data_file_s:
+        print ("\n\nAnalysis on {}\n".format(imFile))
+        rho = rhoExtraction()
+        if cellOn:
+            try:
+                # print ("Extracting Cell")
+                cellDensity = rho.extractDensityFromImages(loadPath, imFile, cellPC, cell_FCrop, refFile, angle, 
+                                centreCoorsOfFringeRegion, mPerPix, mask_percentage, paddingX, paddingY, padSize, blurSize, verbose, visualise) 
+            except:
+                print ("\tFAILED: Cell Extraction")
+                cellDensity = ([], [])    
+        else:
+            cellDensity = ([], [])
 
-    rho = rhoExtraction()
-    rho.extractDensityFromImages()
+        if nozzleOn:
+            try:
+                # print ("Extracting Nozzle")            
+                nozzleDensity = rho.extractDensityFromImages(loadPath, imFile, nozzlePC, nozzle_FCrop, refFile, angle, 
+                                centreCoorsOfFringeRegion, mPerPix, mask_percentage, paddingX, paddingY, padSize, blurSize, verbose, visualise) 
+            except:
+                print ("\tFAILED: Nozzle Extraction")
+                nozzleDensity = ([], [])
+        else:
+            nozzleDensity = ([], [])    
+        
+        output = (nozzleDensity, cellDensity)
+        burstData.append(output)
+        
+        folderpath = analysisSavePath.split("Probe_Interferometry_Analysis")[0]
+        print ("Save the data: ", folderpath)
+        func.check_and_makeFolder(folderpath)
+        np.save(analysisSavePath.split(".")[0]  +  imFile.split(".")[0].split('Shot')[1] + '.npy', output)
+
+    return burstData
 
 
 

@@ -20,11 +20,7 @@ import HASOAnalysis
 import ESpecAnalysis
 import PreCompNFAnalysis
 import XRayAnalysis 
-
-try:
-	import probe_density_extraction 
-except:
-	print('Cannot import probe_density_extraction')
+import probe_density_extraction 
 
 # HELPER FUNCTIONS - COULD BE PLACED ELSEWHERE?
 def getSortedFolderItems(itemPath,key):
@@ -263,25 +259,39 @@ class dataRun:
 	# -------------------------------------------------------------------------------------------------------------------
 
 	# PROBE ANALYSIS
-	def performProbeDensityAnalysis(self, ):
+	def performProbeDensityAnalysis(self, overwrite = True, verbose = False, visualise = False, 
+				Debugging = False):
 		diag = 'Probe_Interferometry'
 		print ("In ", diag)
 
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
+		if not pathExists:
+			os.makedirs(analysisPath)
+		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
 		print (analysisPath, pathExists)
-		
 		probeCalib = self.loadCalibrationData(diag)
-		for burstStr in filePathDict.keys():		
-			analysedData = probe_density_extraction.extract_plasma_density(
-								filePathDict[burstStr],eSpecCalib
-								)
+		folders = list(filePathDict)
+		# print(folders)
+		if Debugging:
+			folders = folders[:1]
+		for burstStr in folders:		
 			
 			analysisSavePath = os.path.join(analysisPath,burstStr,'{}_Analysis'.format(diag))
-			self.saveData(analysisSavePath,analysedData)
+			fileExists = os.path.isfile(analysisSavePath + '.npy')
+			print ("analysisSavePath: ", analysisSavePath)
+			print (fileExists)
 
-			self.logger.info('Performed {} Analysis for '.format(Diag) + burstStr)
-			print ('Analysed {} for '.format(Diag) + burstStr)		
+			if (overwrite == False and fileExists):
+				print ("File exists so not overwriting")
+			else:
+				analysedData = probe_density_extraction.extract_plasma_density(
+								filePathDict[burstStr],probeCalib, analysisSavePath, 
+								verbose = verbose, visualise = visualise)			
+				self.saveData(analysisSavePath,analysedData)
+
+				self.logThatShit('Performed Probe_Interferometry Analysis for ' + burstStr)
+				print('Analysed Probe_Interferometry '+ burstStr)
 
 	# ELECTRON ANALYSIS 
 	def performESpecAnalysis(self,useCalibration=True,overwriteData=False):
@@ -393,22 +403,20 @@ class dataRun:
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
 
-		xrayCalib = self.loadCalibrationData(diag)
+		if justGetCounts==False:
+			xrayCalib = self.loadCalibrationData(diag)
 
 		for burstStr in filePathDict.keys():
 			if justGetCounts:
 				# Here we're going to avoid all actual x-ray code and just sum the image counts
 				# Not even using a background. This is to mimic what happened during optimization
-				imgCounts  = 0
-				cntr = 0
 				for filePath in filePathDict[burstStr]:	
-					imgCounts += np.sum(plt.imread(filePath).astype(float))
-					cntr +=1
-				analysedData = imgCounts/cntr
-				analysisSavePath = os.path.join(analysisPath,burstStr,'XRayImgCounts')
-				self.saveData(analysisSavePath,analysedData)
-				self.logThatShit('Averaged Counts for XRay images for ' + burstStr)
-				print('Averaged Counts for XRay images for ' + burstStr )
+					imgCounts = np.sum(plt.imread(filePath).astype(float))
+					shotName = filePath.split('\\')[-1][:-4]
+					analysisSavePath = os.path.join(analysisPath,burstStr,'XRayImgCounts_'+shotName)
+					self.saveData(analysisSavePath,imgCounts)
+					self.logThatShit('Saved counts for ' + burstStr + ' ' + shotName)
+					print('Saved counts for ' + burstStr + ' ' + shotName )
 				
 			else:
 				analysedData = XRayAnalysis.XRayEcrit(filePathDict[burstStr],xrayCalib)
@@ -682,9 +690,418 @@ class dataRun:
 		return calibData
 
 
+	def loadAnalysedXRayCountsData(self,getShots=False):
+		# General function to pull all of the XRay data from the analysis folder
+		# It will automatically sort the data
+		# It will pull data averaged by burst, with the std deviation
+		# unless getShots is True, in which case, it'll pull all shots individually
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+
+		diag='XRay'
+		
+		analysedDataDir = os.path.join(baseAnalysisFolder,diag,runDate,runName)
+		bursts = [f for f in os.listdir(analysedDataDir) if not f.startswith('.')]
+		
+		if getShots:
+			imgCounts = []
+			shotID = []
+			for burst in bursts:
+				shots = os.listdir(os.path.join(analysedDataDir,burst))
+				for shot in shots:
+					imgCounts.append(np.load(os.path.join(analysedDataDir,burst,shot),allow_pickle=True).astype(float))
+					for elem in shot.replace('.','_').split('_'):
+						if 'Shot' in elem:
+							shotName = elem
+					shotID.append((burst+shotName))
+		else:
+			imgCounts = []
+			shotID = []
+			for burst in bursts:
+				tmpImgCounts = []
+				shots = os.listdir(os.path.join(analysedDataDir,burst))
+				for shot in shots:
+					tmpImgCounts.append(np.load(os.path.join(analysedDataDir,burst,shot),allow_pickle=True))
+				shotID.append(burst)
+				imgCounts.append((np.mean(tmpImgCounts),np.std(tmpImgCounts)))
+		
+		# NOW SORT THE DATA
+		if 'Shot' in shotID[0]:
+			# Shots
+			burstNums = []
+			shotNums = []
+			for burstShot in shotID:
+				# Split up burst and shot strings
+				tmpSpl = burstShot.split('S')
+				tmpSpl[1] = 'S'+tmpSpl[1]
+				burst = tmpSpl[0]
+				shot = tmpSpl[1]
+				# Append them to lists
+				burstNums.append(int(burst[5:]))
+				shotNums.append(int(shot[4:]))
+			orderVal = []
+			maxShotsInBurst = np.amax(shotNums)
+			for i in range(len(burstNums)):
+				orderVal.append((burstNums[i]-1)*maxShotsInBurst+shotNums[i])
+			indxOrder = np.argsort(orderVal)
+			shotID_sorted = np.asarray(shotID)[indxOrder]
+			imgCounts_sorted = np.asarray(imgCounts)[indxOrder]
+		else:
+		# bursts
+			burstNums = []
+			for burst in shotID:
+				burstNums.append(int(burst[5:]))
+			indxOrder = np.argsort(burstNums)
+			shotID_sorted = np.asarray(shotID)[indxOrder]
+			imgCounts_sorted = np.asarray(imgCounts)[indxOrder]
+		
+		return shotID_sorted,imgCounts_sorted        
+
+	def loadLaserEnergy(self,getShots=False,removeDuds=False):
+		# General function to pull all of the XRay data from the analysis folder
+		# It will automatically sort the data
+		# It will pull data averaged by burst, with the std deviation
+		# unless getShots is True, in which case, it'll pull all shots individually
+		
+		energyThreshold = 0.01 # 10 mJ
+		
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+		diag='PreCompNF'
+		
+		analysedDataDir = os.path.join(baseAnalysisFolder,diag,runDate,runName)
+		bursts = [f for f in os.listdir(analysedDataDir) if not f.startswith('.')]
+		
+		if getShots:
+			laserEnergy = []
+			shotID = []
+			for burst in bursts:
+				shots = os.listdir(os.path.join(analysedDataDir,burst))
+				for shot in shots:
+					tmpLaserEnergy = np.load(os.path.join(analysedDataDir,burst,shot),allow_pickle=True)[0].astype(float)
+					if tmpLaserEnergy > energyThreshold or removeDuds is False: # greater than 10 mJ
+						laserEnergy.append(tmpLaserEnergy)
+						for elem in shot.replace('.','_').split('_'):
+							if 'Shot' in elem:
+								shotName = elem
+						shotID.append((burst+shotName))
+		else:
+			laserEnergy = []
+			shotID = []
+			for burst in bursts:
+				shotLaserEnergy = []
+				shots = os.listdir(os.path.join(analysedDataDir,burst))
+				for shot in shots:
+					tmpLaserEnergy = np.load(os.path.join(analysedDataDir,burst,shot),allow_pickle=True)[0]
+					if tmpLaserEnergy > energyThreshold or removeDuds is False:
+						shotLaserEnergy.append(tmpLaserEnergy)
+				shotID.append(burst)
+				laserEnergy.append((np.mean(shotLaserEnergy),np.std(shotLaserEnergy)))
+		
+		# NOW SORT THE DATA
+		if 'Shot' in shotID[0]:
+			# Shots
+			burstNums = []
+			shotNums = []
+			for burstShot in shotID:
+				# Split up burst and shot strings
+				tmpSpl = burstShot.split('S')
+				tmpSpl[1] = 'S'+tmpSpl[1]
+				burst = tmpSpl[0]
+				shot = tmpSpl[1]
+				
+				burstNums.append(int(burst[5:]))
+				shotNums.append(int(shot[4:]))
+			orderVal = []
+			maxShotsInBurst = np.amax(shotNums)
+			for i in range(len(burstNums)):
+				orderVal.append((burstNums[i]-1)*maxShotsInBurst+shotNums[i])
+			indxOrder = np.argsort(orderVal)
+			shotID_sorted = np.asarray(shotID)[indxOrder]
+			laserEnergy_sorted = np.asarray(laserEnergy)[indxOrder]
+		else:
+		# bursts
+			burstNums = []
+			for burst in shotID:
+				burstNums.append(int(burst[5:]))
+			indxOrder = np.argsort(burstNums)
+			shotID_sorted = np.asarray(shotID)[indxOrder]
+			laserEnergy_sorted = np.asarray(laserEnergy)[indxOrder]
+		
+		return shotID_sorted,laserEnergy_sorted    
 
 
+	def loadAnalysedSpecPhase(self, getShots=False,removeDuds=False):
+		# Retrieves the spectral phase from the spider
+
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+
+		diag = 'SPIDER'
+			
+		runDir = os.path.join(baseAnalysisFolder , diag,  runDate , runName)
+		bursts = [f for f in os.listdir(runDir) if not f.startswith('.')]
+			
+
+		if getShots:
+			# Get individual shots
+			GDD = []
+			TOD = []
+			FOD = []
+			shotID = []
+			for burst in bursts:
+				burstDir = os.path.join(runDir,burst)
+				shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
+				for shot in shots:
+					shotPath = os.path.join(burstDir,shot)
+					timeProfile, specPhaseOrders = np.load(shotPath,allow_pickle=True) 
+					# Check for duds
+					t,I = timeProfile
+					indxs = np.argwhere(np.abs(t)>400) # places further than 400 fs from the middle
+					testSum = np.sum(I[indxs])
+					if testSum < 1 or removeDuds is False:
+						for elem in shot.replace('.','_').split('_'):
+							if 'Shot' in elem:
+								shotName = elem
+						shotID.append((burst+shotName))
+						GDD.append(specPhaseOrders[0])
+						TOD.append(specPhaseOrders[1])
+						FOD.append(specPhaseOrders[2])
+							
+		else:
+			GDD = []
+			TOD = []
+			FOD = []
+			shotID = []
+			
+			for burst in bursts:
+				burstDir = os.path.join(runDir,burst)
+				shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
+
+				tmpGDD = []
+				tmpTOD = []
+				tmpFOD = []
+				
+				for shot in shots:
+					shotPath = os.path.join(burstDir,shot)
+					timeProfile, specPhaseOrders = np.load(shotPath,allow_pickle=True) 
+				
+					# Check for duds
+					t,I = timeProfile
+					indxs = np.argwhere(np.abs(t)>400) # places further than 400 fs from the middle
+					testSum = np.sum(I[indxs])
+					if testSum < 1 or removeDuds is False:
+						tmpGDD.append(specPhaseOrders[0])
+						tmpTOD.append(specPhaseOrders[1])
+						tmpFOD.append(specPhaseOrders[2])
+						
+				shotID.append(burst)        
+				GDD.append((np.mean(tmpGDD),np.std(tmpGDD)))
+				TOD.append((np.mean(tmpTOD),np.std(tmpTOD)))
+				FOD.append((np.mean(tmpFOD),np.std(tmpFOD)))
+
+		if 'Shot' in shotID[0]:
+			# Shots
+			burstNums = []
+			shotNums = []
+			for burstShot in shotID:
+				# Split up burst and shot strings
+				tmpSpl = burstShot.split('S')
+				tmpSpl[1] = 'S'+tmpSpl[1]
+				burst = tmpSpl[0]
+				shot = tmpSpl[1]
+
+				burstNums.append(int(burst[5:]))
+				shotNums.append(int(shot[4:]))
+			orderVal = []
+			maxShotsInBurst = np.amax(shotNums)
+			for i in range(len(burstNums)):
+				orderVal.append((burstNums[i]-1)*maxShotsInBurst+shotNums[i])
+			indxOrder = np.argsort(orderVal)
+			shotID_sorted = np.asarray(shotID)[indxOrder]
+			GDD_sorted = np.asarray(GDD)[indxOrder] 
+			TOD_sorted = np.asarray(TOD)[indxOrder] 
+			FOD_sorted = np.asarray(FOD)[indxOrder] 
+		else:
+			# bursts
+			burstNums = []
+			for burst in shotID:
+				burstNums.append(int(burst[5:]))
+			indxOrder = np.argsort(burstNums)
+			shotID_sorted = np.asarray(shotID)[indxOrder]
+			GDD_sorted = np.asarray(GDD)[indxOrder] 
+			TOD_sorted = np.asarray(TOD)[indxOrder] 
+			FOD_sorted = np.asarray(FOD)[indxOrder] 
+				
+		return shotID_sorted , GDD_sorted, TOD_sorted,FOD_sorted
+
+	def loadPulseDuration(self, getShots=False,removeDuds=False):
+		# Returns the FWHM Pulse duration as measured by the SPIDER
+		
+		def getPulseDuration(timeArr,I_t):		
+			# Returns FWHM pulse duration of a laser temporal profile
+			zeroTimeIndx = np.argmin(abs(timeArr))
+			earlyI_t = I_t[0:zeroTimeIndx]
+			earlytimeArr = timeArr[0:zeroTimeIndx]
+			lateI_t = I_t[zeroTimeIndx:-1]
+			latetimeArr = timeArr[zeroTimeIndx:-1]
+			
+			# quick and dirty function to find the FWHM of the intensity profile of the pulse
+			t1 = earlytimeArr[np.argmin(  abs(earlyI_t - np.amax(I_t)/2)   ) ]
+			t2 = latetimeArr[np.argmin(abs(lateI_t - np.amax(I_t)/2))]
+			fwhm = t2-t1
+							
+			return fwhm
+
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+
+		diag = 'SPIDER'
+			
+		runDir = os.path.join(baseAnalysisFolder , diag,  runDate , runName)
+		bursts = [f for f in os.listdir(runDir) if not f.startswith('.')]
+			
+
+		if getShots:
+			# Get individual shots
+			pulseDuration = []
+			shotID = []
+			for burst in bursts:
+				burstDir = os.path.join(runDir,burst)
+				shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
+				for shot in shots:
+					shotPath = os.path.join(burstDir,shot)
+					timeProfile, specPhaseOrders = np.load(shotPath,allow_pickle=True) 
+					# Check for duds
+					t,I = timeProfile
+					indxs = np.argwhere(np.abs(t)>400) # places further than 400 fs from the middle
+					testSum = np.sum(I[indxs])
+					if testSum < 1 or removeDuds is False:
+						for elem in shot.replace('.','_').split('_'):
+							if 'Shot' in elem:
+								shotName = elem
+						shotID.append((burst+shotName))
+						pulseDuration.append(getPulseDuration(t,I))
+							
+		else:
+			pulseDuration = []
+			shotID = []
+			
+			for burst in bursts:
+				burstDir = os.path.join(runDir,burst)
+				shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
+
+				tmpPulseDuration = []
+				
+				for shot in shots:
+					shotPath = os.path.join(burstDir,shot)
+					timeProfile, specPhaseOrders = np.load(shotPath,allow_pickle=True) 
+				
+					# Check for duds
+					t,I = timeProfile
+					indxs = np.argwhere(np.abs(t)>400) # places further than 400 fs from the middle
+					testSum = np.sum(I[indxs])
+					if testSum < 1 or removeDuds is False:
+						tmpPulseDuration.append(getPulseDuration(t,I))
+						
+				shotID.append(burst)        
+				pulseDuration.append((np.mean(tmpPulseDuration),np.std(tmpPulseDuration)))
 
 
+		if 'Shot' in shotID[0]:
+			# Shots
+			burstNums = []
+			shotNums = []
+			for burstShot in shotID:
+				# Split up burst and shot strings
+				tmpSpl = burstShot.split('S')
+				tmpSpl[1] = 'S'+tmpSpl[1]
+				burst = tmpSpl[0]
+				shot = tmpSpl[1]
 
+				burstNums.append(int(burst[5:]))
+				shotNums.append(int(shot[4:]))
+			orderVal = []
+			maxShotsInBurst = np.amax(shotNums)
+			for i in range(len(burstNums)):
+				orderVal.append((burstNums[i]-1)*maxShotsInBurst+shotNums[i])
+			indxOrder = np.argsort(orderVal)
+			shotID_sorted = np.asarray(shotID)[indxOrder]
+			pulseDuration_sorted = np.asarray(pulseDuration)[indxOrder] 
 
+		else:
+			# bursts
+			burstNums = []
+			for burst in shotID:
+				burstNums.append(int(burst[5:]))
+			indxOrder = np.argsort(burstNums)
+			shotID_sorted = np.asarray(shotID)[indxOrder]
+			pulseDuration_sorted = np.asarray(pulseDuration)[indxOrder] 
+
+				
+		return shotID_sorted , pulseDuration_sorted
+		
+			
+	def loadGasSetPressure(self):
+		# Retrieve the gas set pressure
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+
+		dataPath= os.path.join(baseAnalysisFolder,'General',runDate,runName,'GasCellPressure.npy')
+		tmpGasPressure = np.load(dataPath,allow_pickle=True)
+		tmpGasPressure = tmpGasPressure.item()
+		gasPressure = []
+		shotID = []
+
+		for i in range(len(tmpGasPressure)):
+			gasPressure.append(tmpGasPressure[i+1])
+			shotID.append('Burst'+str(i+1))
+		
+		burstNums = []
+		for burst in shotID:
+			burstNums.append(int(burst[5:]))
+		indxOrder = np.argsort(burstNums)
+		shotID_sorted = np.asarray(shotID)[indxOrder]
+		gasPressure_sorted = np.asarray(gasPressure)[indxOrder] 
+
+		return shotID_sorted, gasPressure_sorted
+
+	def loadHASOFocusData(self):
+		# Perhaps here we want not only to load burst, but individual shots
+		# We need to get adapt the earlier HASOAnalysis function above to do this.
+		a = 1
+
+		'calibratedWavefront.npy'
+
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+
+		diag = 'HASO'
+		
+		runDir = os.path.join(baseAnalysisFolder , diag,  runDate , runName)
+		bursts = [f for f in os.listdir(runDir) if not f.startswith('.')]
+		
+		z4 = []
+		shotID = []
+
+		for burst in bursts:
+			filename = os.path.join(runDir,burst,'calibratedWavefront.npy')
+			zernikes = np.load(filename)
+
+			z4.append(zernikes[4])
+			shotID.append(burst)
+		
+		burstNums = []
+		for burst in shotID:
+			burstNums.append(int(burst[5:]))
+		indxOrder = np.argsort(burstNums)
+		shotID_sorted = np.asarray(shotID)[indxOrder]
+		z4_sorted = np.asarray(z4)[indxOrder] 
+
+		return shotID_sorted, z4_sorted

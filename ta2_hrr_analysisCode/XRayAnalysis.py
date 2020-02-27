@@ -20,34 +20,14 @@ import pkg_resources
 import re
 
 
-def createYLimits(calibrationTuple):
-    (ImageTransformationTuple, CameraTuple, TransmissionTuple) = calibrationTuple
-    (PixelSize, GasCell2Camera, RepRate, Alpha, Alpha_error, energy, TQ) = CameraTuple
-    (filterNames, ecrit, Y) = TransmissionTuple
-    (P, BackgroundImage, BackgroundNoise) = ImageTransformationTuple
-    AverageNoise = np.mean( np.array(BackgroundNoise))
-    tmp = [x[-1]/x[0] for x in Y]
-    minimalCounts = [scipy.integrate.trapz( Alpha * TQ * synchrotronFunction(energy, ec), energy) for ec in ecrit]
-    minimalCountsHighFilter = np.array(tmp) * np.array(minimalCounts)
-    idrel = np.argmin( np.abs( minimalCountsHighFilter - AverageNoise ) )
-    Ylimits = np.zeros(Y.shape[1])
-    Ylimits[0] = minimalCounts[idrel]
-    for i in range(1, Y.shape[1]):
-        tmp = [x[i]/x[0] for x in Y]
-        tmp2 = np.array(tmp) * np.array(minimalCounts)
-        Ylimits[i] = tmp2[idrel]
-    return Ylimits
 
 def XRayEcrit(FileList, calibrationTuple):
     (ImageTransformationTuple, CameraTuple, TransmissionTuple) = calibrationTuple
-    (PixelSize, GasCell2Camera, RepRate, Alpha, Alpha_error, energy, TQ) = CameraTuple
     (filterNames, ecrit, Y) = TransmissionTuple
     (P, BackgroundImage, BackgroundNoise) = ImageTransformationTuple
-    backgroundNoiseList = createYLimits(calibrationTuple)
-    # backgroundNoiseList = getValues(BackgroundNoise, P)
+    backgroundNoiseList = getValues(BackgroundNoise, P)
     images = ImportImageFiles(FileList)
     data = []
-    Peaklist = []
     for i in range(0, images.shape[2]):
         image = images[:, :, i] - BackgroundImage
         ValueList = getValues(image, P)
@@ -56,17 +36,12 @@ def XRayEcrit(FileList, calibrationTuple):
         preparedData, PeakIntensity = cleanValues(ValueList, backgroundNoiseList)
         if len(preparedData) != 0:
             data.append(preparedData)
-            Peaklist.append(PeakIntensity)
-    if len(data) > 0:
-        AverageValues, StdValues = combineImageValues(data)
-        bestEcrit, ecritStd = determineEcrit(AverageValues, StdValues, ecrit, Y)
-        PeakIntensityStd = np.std(np.array(Peaklist))
-        PeakIntensity = np.mean(np.array(Peaklist))
-        NPhotons, sigma_NPhotons, _, NPhotons_01percent_omega_s = getPhotonFlux(bestEcrit, ecritStd, PeakIntensity, PeakIntensityStd, CameraTuple)
-        analysedData = (AverageValues, StdValues, PeakIntensity, PeakIntensityStd, bestEcrit, ecritStd, NPhotons, sigma_NPhotons, NPhotons_01percent_omega_s)
-    else:
-        analysedData = []
-        print('Not enough signal on the x-ray camera to calculate a critical energy')
+            AverageValues, StdValues = combineImageValues(data)
+            bestEcrit, ecritStd = determineEcrit(AverageValues, StdValues, ecrit, Y)
+            PeakIntensityStd = np.std(np.array(PeakIntensity))
+            PeakIntensity = np.mean(np.array(PeakIntensity))
+            NPhotons, sigma_NPhotons, _, NPhotons_01percent_omega_s = getPhotonFlux(bestEcrit, ecritStd, PeakIntensity, PeakIntensityStd, CameraTuple)
+            analysedData = (bestEcrit, ecritStd, NPhotons, sigma_NPhotons, NPhotons_01percent_omega_s)
     return analysedData
 
 
@@ -116,10 +91,6 @@ def determineEcrit(AverageValues, StdValues, ecrit, Y):
     BestId = np.argmin(Chi2)
     bestEcrit = ecrit[BestId]
     # uncertainty:
-    if BestId >= ecrit.shape[0]-1:
-        BestId -= 2
-    elif BestId <= 1:
-        BestId += 2
     Chi2 = np.sum((AverageValues - Y)**2, 1)/N 
     DeltaF = (Y[BestId+1] - Y[BestId-1]) / (ecrit[BestId+1] - ecrit[BestId-1])
     alphaInverted = 1/np.sum(DeltaF * DeltaF.T)
@@ -137,7 +108,7 @@ def combineImageValues(data):
     AverageValues = []
     StdValues = []
     for i in range(0, len(data[0])):
-        ValuesHere = [placeHolder for x in data for placeHolder in x[i]]
+        ValuesHere = [x[i] for x in data]
         AverageValues.append(np.mean(ValuesHere))
         StdValues.append(np.std(ValuesHere))
     return AverageValues, StdValues
@@ -149,7 +120,8 @@ def cleanValues(ValueList, backgroundNoiseList):
     ToNormalise = np.zeros(len(ValueList))
     for i in range(0, len(ValueList)):
         tmpV = ValueList[i]
-        Vs = tmpV[tmpV > backgroundNoiseList[i]]
+        tempB = backgroundNoiseList[i]
+        Vs = tmpV[tmpV > tempB]
         if len(Vs) == 0:
             print('Values in \'clean Values\' are empty. Std of background is too high')
             cleanV = []

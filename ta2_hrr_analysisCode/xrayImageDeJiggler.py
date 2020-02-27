@@ -109,6 +109,11 @@ class xrayDeJiggler:
                 x_test = np.array(x_test)
             else:
                 x_test = BO.ask(1e-20)
+                if x_test is None:
+                    for nD in range(nDims):
+                        r = max(bounds[nD]) - min(bounds[nD])
+                        x_test.append(int(np.random.rand()*r+min(bounds[nD])))
+                    x_test = np.array(x_test)
 
             y_val = self.imgRollDiff(img,x_test)
             BO.tell(x_test,y_val,y_val*0.01)
