@@ -110,6 +110,7 @@ class xrayDeJiggler:
             else:
                 x_test = BO.ask(1e-20)
                 if x_test is None:
+                    x_test = []
                     for nD in range(nDims):
                         r = max(bounds[nD]) - min(bounds[nD])
                         x_test.append(int(np.random.rand()*r+min(bounds[nD])))
