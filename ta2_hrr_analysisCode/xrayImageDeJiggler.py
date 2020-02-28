@@ -228,7 +228,7 @@ class xrayDeJiggler:
         sys.stdout.flush()
         print('\r','Done')   
         
-        return imgComb, x_rot , y_rot
+        return self.imgComb, x_rot , y_rot
 
 
 
