@@ -7,7 +7,7 @@
     /    |   /   |  |\ | ||_
    /____ |__/\ . |  | \|_|\_|
    __________________________ .
-Modified on 25/02/2020, 13:10:52
+Modified on 09/03/2020, 12:02:45
 @author: chrisunderwood
 """
 import numpy as np
@@ -1256,48 +1256,89 @@ class rhoExtraction(phi_to_rho, phaseShift):
         self.draw_outline(bot,top,left,right, color = 'blue')
         self.plot_data( self.im)
 
+def assertCal_correct(nozzleOn, cellOn, cellChanging, calibrationData, verbose):
+    # Check the calibration file contains the correct information
+    assert type(nozzleOn) == bool, "nozzleOn {}".format(nozzleOn)
+    assert type(cellOn) == bool  , "cellOn {}".format(cellOn)
+    assert (type(cellChanging) == bool or type(cellChanging) == tuple),  "cellChanging {}".format(cellChanging)
+    assert len(calibrationData) == 16 , "len (calibrationData) {}".format( len(calibrationData) )
+    if verbose: print ("Input data recieved correctly")
 
 def extract_plasma_density(data_file_s, calibrationData, analysisSavePath, 
             verbose = False, visualise = False):
     if verbose:
-        print ("files", data_file_s)
+        # Print the list of files
         print ("len Files", len(data_file_s))
         print ("len of cal data", len(calibrationData))
+        print ("files", data_file_s)
 
+    # Load the calibration information in.
     refFile, cellChanging, cellOn, cellPC, cell_FCrop, nozzleOn, nozzlePC, nozzle_FCrop, angle, centreCoorsOfFringeRegion, mPerPix, mask_percentage, paddingX, paddingY, padSize, blurSize = calibrationData
+    if verbose:
+        # Display the calibration tuple
+        cal = [refFile, cellChanging, cellOn, cellPC, cell_FCrop, nozzleOn, nozzlePC, nozzle_FCrop, angle, centreCoorsOfFringeRegion, mPerPix, mask_percentage, paddingX, paddingY, padSize, blurSize]
+        names = ["refFile", "cellChanging", "cellOn", "cellPC", "cell_FCrop", "nozzleOn", "nozzlePC", "nozzle_FCrop", "angle", "centreCoorsOfFringeRegion", "mPerPix", "mask_percentage", "paddingX", "paddingY", "padSize", "blurSize"]
+        for i, n, d in zip(range(len(names)), names, cal):
+            print (i, n, d)
 
-    assert type(nozzleOn) == bool
-    assert type(cellOn) == bool            
-    assert type(cellChanging) == bool
-    assert len(calibrationData) == 16
-    if verbose: print ("Input data recieved correctly")
+    assertCal_correct(nozzleOn, cellOn, cellChanging, calibrationData, verbose)
+
+
+    if type(cellChanging) == tuple:
+        print ("Cell length is changing")
+        offset, cellLengthForRun = cellChanging
+        burstFolderPath = data_file_s[0]
+        print (burstFolderPath)
+        burst_name = burstFolderPath.split("/")[-2]
+        print ("Burst Name", burst_name)
+        
+        burst_number = int(burst_name.split("urst")[1])
+        burst_index = np.where(np.array(cellLengthForRun[:,0], dtype = int) == burst_number)[0][0]
+        actualCellLength_m = cellLengthForRun[:,1][burst_index] * 1e-3
+
+        print (actualCellLength_m)
+        nPixels_Raw = int(actualCellLength_m / mPerPix)
+        #               Due to a coding quirk the pixels have to be even
+        NewCropLength = ( (nPixels_Raw + offset)//2 ) * 2
+        print ("Old", cellPC)
+        cellPC[3] = cellPC[2] + NewCropLength
+        print ("New Corrected", cellPC)
+
+        if cellPC[3] < cellPC[2]:
+            cellOn = False
+
 
     loadPath = ''
     burstData = []
     for imFile in data_file_s:
         print ("\n\nAnalysis on {}\n".format(imFile))
-        rho = rhoExtraction()
-        if cellOn:
-            try:
-                # print ("Extracting Cell")
-                cellDensity = rho.extractDensityFromImages(loadPath, imFile, cellPC, cell_FCrop, refFile, angle, 
-                                centreCoorsOfFringeRegion, mPerPix, mask_percentage, paddingX, paddingY, padSize, blurSize, verbose, visualise) 
-            except:
-                print ("\tFAILED: Cell Extraction")
-                cellDensity = ([], [])    
-        else:
+        if cellOn == False and nozzleOn == False:
+            print ("No extraction possible")
             cellDensity = ([], [])
-
-        if nozzleOn:
-            try:
-                # print ("Extracting Nozzle")            
-                nozzleDensity = rho.extractDensityFromImages(loadPath, imFile, nozzlePC, nozzle_FCrop, refFile, angle, 
-                                centreCoorsOfFringeRegion, mPerPix, mask_percentage, paddingX, paddingY, padSize, blurSize, verbose, visualise) 
-            except:
-                print ("\tFAILED: Nozzle Extraction")
-                nozzleDensity = ([], [])
+            nozzleDensity = ([], []) 
         else:
-            nozzleDensity = ([], [])    
+            rho = rhoExtraction()
+            if cellOn:
+                try:
+                    # print ("Extracting Cell")
+                    cellDensity = rho.extractDensityFromImages(loadPath, imFile, cellPC, cell_FCrop, refFile, angle, 
+                                    centreCoorsOfFringeRegion, mPerPix, mask_percentage, paddingX, paddingY, padSize, blurSize, verbose, visualise) 
+                except:
+                    print ("\tFAILED: Cell Extraction")
+                    cellDensity = ([], [])    
+            else:
+                cellDensity = ([], [])
+
+            if nozzleOn:
+                try:
+                    # print ("Extracting Nozzle")            
+                    nozzleDensity = rho.extractDensityFromImages(loadPath, imFile, nozzlePC, nozzle_FCrop, refFile, angle, 
+                                    centreCoorsOfFringeRegion, mPerPix, mask_percentage, paddingX, paddingY, padSize, blurSize, verbose, visualise) 
+                except:
+                    print ("\tFAILED: Nozzle Extraction")
+                    nozzleDensity = ([], [])
+            else:
+                nozzleDensity = ([], [])    
         
         output = (nozzleDensity, cellDensity)
         burstData.append(output)
