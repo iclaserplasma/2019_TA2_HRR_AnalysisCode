@@ -1175,7 +1175,7 @@ class dataRun:
 
 		for burst in bursts:
 			filename = os.path.join(runDir,burst, fileName)
-			zernikes = np.load(filename, allow_pickle = True)
+			zernikes , r = np.load(filename, allow_pickle = True)
 
 			z4.append(zernikes[-1])
 			shotID.append(burst)
@@ -1187,4 +1187,4 @@ class dataRun:
 		shotID_sorted = np.asarray(shotID)[indxOrder]
 		z4_sorted = np.asarray(z4)[indxOrder] 
 
-		return shotID_sorted, z4_sorted
+		return shotID_sorted, z4_sorted , r
