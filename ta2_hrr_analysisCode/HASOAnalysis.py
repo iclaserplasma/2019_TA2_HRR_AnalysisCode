@@ -126,8 +126,9 @@ def extractCalibratedWavefrontInfo(dataFile,zernikeOffsets,verbose=False):
 
 	# Now extract the radius which is essential for scaling the zernikes
 	(cgx,cgy,r) = pupilCoords
-
-	return zernikes, r
+	
+	calibratedWavefrontInfo = zernikes, r
+	return calibratedWavefrontInfo
 
 def createCalibrationFile(inChamberHASDir,leakageHASDir,saveDir):
 	# Given a set of haso measurements from inside the chamber and from the leakage table
