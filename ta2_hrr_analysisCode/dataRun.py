@@ -1154,7 +1154,7 @@ class dataRun:
 
 		return shotID_sorted, gasLength_sorted		
 
-	def loadHASOFocusData(self, fileOption_0_1 = 1):
+	def loadHASOFocusData(self, fileOption_0_1 = 1,returnFocusShift=False):
 		# Perhaps here we want not only to load burst, but individual shots
 		# We need to get adapt the earlier HASOAnalysis function above to do this.
 
@@ -1187,4 +1187,10 @@ class dataRun:
 		shotID_sorted = np.asarray(shotID)[indxOrder]
 		z4_sorted = np.asarray(z4)[indxOrder] 
 
-		return shotID_sorted, z4_sorted 
+		if returnFocusShift:
+			a4_to_RealSpace = 0.001169   # 1.169 mm per measured focal term
+			direction = -1				# From Matts email "More z3 focuses harder" so, more focal term beings focus negative, towards parabola
+			focusShift = direction*z4_sorted*a4_to_RealSpace
+			return shotID_sorted, z4_sorted , focusShift
+		else:
+			return shotID_sorted, z4_sorted
