@@ -345,7 +345,7 @@ class dataRun:
 		return 0
 
 	# HASO Analysis
-	def performHASOAnalysis(self,useChamberCalibration=True):
+	def performHASOAnalysis(self,useChamberCalibration=True,getIndividualShots=False):
 		diag = 'HASO'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -355,16 +355,30 @@ class dataRun:
 		
 		for burstStr in filePathDict.keys():		
 			if useChamberCalibration:
-				analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(filePathDict[burstStr],zernikeOffsets)
-				# Save the data
-				analysisSavePath = os.path.join(analysisPath,burstStr,'calibratedWavefront')
-				self.saveData(analysisSavePath,analysedData)
+				if getIndividualShots:
+					for shotFile in filePathDict[burstStr]:
+						analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(shotFile,zernikeOffsets)
+						# Save the data
+						analysisSavePath = os.path.join(analysisPath,burstStr,shotFile[-9:-4])
+						self.saveData(analysisSavePath,analysedData)
+				else:
+					analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(filePathDict[burstStr],zernikeOffsets)
+					# Save the data
+					analysisSavePath = os.path.join(analysisPath,burstStr,'calibratedWavefront')
+					self.saveData(analysisSavePath,analysedData)
 
 			else:
-				analysedData = HASOAnalysis.extractWavefrontInfo(filePathDict[burstStr])
-				# Save the data
-				analysisSavePath = os.path.join(analysisPath,burstStr,'waveFrontOnLeakage')
-				self.saveData(analysisSavePath,analysedData)
+				if getIndividualShots:
+					for shotFile in filePathDict[burstStr]:
+						analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(shotFile)
+						# Save the data
+						analysisSavePath = os.path.join(analysisPath,burstStr,shotFile[-9:-4])
+						self.saveData(analysisSavePath,analysedData)
+				else:
+					analysedData = HASOAnalysis.extractWavefrontInfo(filePathDict[burstStr])
+					# Save the data
+					analysisSavePath = os.path.join(analysisPath,burstStr,'waveFrontOnLeakage')
+					self.saveData(analysisSavePath,analysedData)
 			self.logThatShit('Performed HASO Analysis for ' + burstStr)
 			print('Analysed HASO '+ burstStr)
 
