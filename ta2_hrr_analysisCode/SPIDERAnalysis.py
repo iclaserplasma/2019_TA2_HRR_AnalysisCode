@@ -33,7 +33,7 @@ def readSPIDER_temporal_profile(path):
                      # The data is in binary, so we need to decode it to append to arrays
                      d.append([float(line.split(b"\t")[0].decode()), float(line.split(b"\t")[2].decode())])
             d = np.array(d)
-            return d[:,0], d[:,2]
+            return d[:,0], d[:,1]
     # If it hasn't found the data return arrays of zero
     return np.zeros(10)
 
