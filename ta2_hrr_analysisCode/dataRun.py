@@ -23,32 +23,6 @@ import PreCompNFAnalysis
 import XRayAnalysis 
 import probe_density_extraction 
 
-# HELPER FUNCTIONS - COULD BE PLACED ELSEWHERE?
-def getSortedFolderItems(itemPath,key):
-	itemList = os.listdir(itemPath)
-	iList = []
-	iNum = []
-	for s in itemList:
-		if key in s:
-			iList.append(s)
-			iNum.append(int(''.join(filter(str.isdigit, s))))
-	return [x for _,x in sorted(zip(iNum,iList))]
-
-def getShotFilePathDict(runPath):
-	burstList = getSortedFolderItems(runPath,'Burst')
-	filePathDict = {}
-	for b in burstList:
-		bPath = os.path.join(runPath,b)
-		fileList = getSortedFolderItems(bPath,'Shot')
-		filePathDict[b] = [os.path.join(bPath, f) for f in fileList]
-	return filePathDict
-
-def loadRunObject(path):
-	'''Load a pickled Run object'''
-	f = open(path, 'rb')
-	run = pickle.load(f)
-	return run
-
 
 class dataRun:
 
@@ -58,11 +32,24 @@ class dataRun:
 	# -------------------------------------------------------------------------------------------------------------------
 
 
-	def __init__(self, baseDataFolder, baseAnalysisFolder, calibrationFolder, runDate, runName,verbose=0,overwrite=False):
-		# baseDataFolder is the location of the Mirage Data folder
-		# runDate is a string
-		# runName is a string
-		
+	def __init__(self, baseDataFolder, baseAnalysisFolder, calibrationFolder, runDate, runName,verbose=False,overwrite=False):
+		""" 
+		Initializes the run object, stores key information pertinant to the run and starts logging the analysis actions
+
+		Args:
+		baseDataFolder (string): 		location of the MIRAGE Data folder (folder containing the raw data for the whole 
+										experiment)
+		baseAnalysisFolder (string): 	location of the folder in which the analysed data is to be saved. This folder has 
+										an identical structure to that of the MIRAGE folder
+		calibrationFolder (string): 	Folder in which calibrations for each of the diagnostics is stored. This folder 
+										also has an indentical structure to the MIRAGE folder
+		runDate (string): 				date ('YYYYMDD') on which the run was taken. runs after midnight are still labelled 
+										as the previous day
+		runName (string):				A string identifiying the specific run. Can be anything, although ususally is something
+										sensible like 'run015'
+		verbose	(bool):					verbose output, 1 for verbose output (printed to console)
+		overwrite (bool):				To overwrite logger file and create new run object or not overwrite and load old run
+		"""
 		# First Check if the run Object already exists. If it does, then just load it in.
 
 		runObjectPath = os.path.join(baseAnalysisFolder , 'General' , runDate , runName , 'runObject.pkl' )
@@ -128,7 +115,9 @@ class dataRun:
 
 
 	def findAvailableDiagnostics(self,runDate,runName):
-		# By following through the folder system, this will tell us what the diagnostics were for the run
+		'''
+		 By following through the folder system, this will tell us what the diagnostics were for the run
+		'''
 		baseDataFolder 	= self.baseDataFolder
 		
 		diagList = next(os.walk(baseDataFolder))[1] # diagnostics are folders in the baseDataFolder
@@ -344,6 +333,8 @@ class dataRun:
 			self.logThatShit('Performed SPIDER Analysis for ' + burstStr)
 			print('Analysed SPIDER '+ burstStr)
 		return 0
+
+
 
 	# HASO Analysis
 	def performHASOAnalysis(self,useChamberCalibration=True,getIndividualShots=False,overwriteAnalysis=True):
@@ -1261,3 +1252,29 @@ class dataRun:
 			return shotID_sorted, z4_sorted , focusShift
 		else:
 			return shotID_sorted, z4_sorted
+
+# HELPER FUNCTIONS 
+def getSortedFolderItems(itemPath,key):
+	itemList = os.listdir(itemPath)
+	iList = []
+	iNum = []
+	for s in itemList:
+		if key in s:
+			iList.append(s)
+			iNum.append(int(''.join(filter(str.isdigit, s))))
+	return [x for _,x in sorted(zip(iNum,iList))]
+
+def getShotFilePathDict(runPath):
+	burstList = getSortedFolderItems(runPath,'Burst')
+	filePathDict = {}
+	for b in burstList:
+		bPath = os.path.join(runPath,b)
+		fileList = getSortedFolderItems(bPath,'Shot')
+		filePathDict[b] = [os.path.join(bPath, f) for f in fileList]
+	return filePathDict
+
+def loadRunObject(path):
+	'''Load a pickled Run object'''
+	f = open(path, 'rb')
+	run = pickle.load(f)
+	return run
