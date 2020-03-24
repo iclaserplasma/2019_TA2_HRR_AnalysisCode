@@ -5,6 +5,7 @@ from scipy.signal import medfilt
 from sqlDatabase import connectToSQL
 import logging
 import csv 
+import glob
 # Works with file paths on all operating systems
 from pathlib import Path
 
@@ -1178,7 +1179,7 @@ class dataRun:
 
 		return shotID_sorted, gasLength_sorted		
 
-	def loadHASOFocusData(self, fileOption_0_1 = 1,returnFocusShift=False):
+	def loadHASOFocusData(self, fileOption_0_1 = 1,getShots=False,returnFocusShift=False):
 		# Perhaps here we want not only to load burst, but individual shots
 		# We need to get adapt the earlier HASOAnalysis function above to do this.
 
@@ -1194,22 +1195,64 @@ class dataRun:
 		runDir = os.path.join(baseAnalysisFolder , diag,  runDate , runName)
 		bursts = [f for f in os.listdir(runDir) if not f.startswith('.')]
 		
-		z4 = []
-		shotID = []
+		if getShots:
+			z4 = []
+			shotID = []
+			for burst in bursts:
+				shots = glob.glob(os.path.join(runDir,burst,'Shot*'))
+				for shot in shots:
+					zernikes = np.load(shot,allow_pickle=True)
+					z4.append(zernikes[4])
+					shotName = shot.split('\\')[-1]
+					for elem in shotName.replace('.','_').split('_'):
+						if 'Shot' in elem:
+							shotName = elem
+					shotID.append((burst+shotName))
 
-		for burst in bursts:
-			filename = os.path.join(runDir,burst, fileName)
-			zernikes  = np.load(filename, allow_pickle = True)
+		else:
+			# Should be a condition here to check if individual shot data exists,
+			# such that we can provide an error
 
-			z4.append(zernikes[-1])
-			shotID.append(burst)
+			# TO DO
+
+			z4 = []
+			shotID = []
+			for burst in bursts:
+				filename = os.path.join(runDir,burst, fileName)
+				zernikes  = np.load(filename, allow_pickle = True)
+
+				# z4.append(zernikes[-1]) This looks like a mistake!
+				z4.append(zernikes[4])
+				shotID.append(burst)
 		
-		burstNums = []
-		for burst in shotID:
-			burstNums.append(int(burst[5:]))
-		indxOrder = np.argsort(burstNums)
-		shotID_sorted = np.asarray(shotID)[indxOrder]
-		z4_sorted = np.asarray(z4)[indxOrder] 
+
+		if 'Shot' in shotID[0]:
+			# Shots
+			burstNums = []
+			shotNums = []
+			for burstShot in shotID:
+				# Split up burst and shot strings
+				tmpSpl = burstShot.split('S')
+				tmpSpl[1] = 'S'+tmpSpl[1]
+				burst = tmpSpl[0]
+				shot = tmpSpl[1]
+				
+				burstNums.append(int(burst[5:]))
+				shotNums.append(int(shot[4:]))
+			orderVal = []
+			maxShotsInBurst = np.amax(shotNums)
+			for i in range(len(burstNums)):
+				orderVal.append((burstNums[i]-1)*maxShotsInBurst+shotNums[i])
+			indxOrder = np.argsort(orderVal)
+			shotID_sorted = np.asarray(shotID)[indxOrder]
+			z4_sorted = np.asarray(z4)[indxOrder]
+		else:
+			burstNums = []
+			for burst in shotID:
+				burstNums.append(int(burst[5:]))
+			indxOrder = np.argsort(burstNums)
+			shotID_sorted = np.asarray(shotID)[indxOrder]
+			z4_sorted = np.asarray(z4)[indxOrder] 
 
 		if returnFocusShift:
 			a4_to_RealSpace = 0.001169   # 1.169 mm per measured focal term
