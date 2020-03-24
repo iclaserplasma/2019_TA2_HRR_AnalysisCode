@@ -345,7 +345,7 @@ class dataRun:
 		return 0
 
 	# HASO Analysis
-	def performHASOAnalysis(self,useChamberCalibration=True,getIndividualShots=False):
+	def performHASOAnalysis(self,useChamberCalibration=True,getIndividualShots=False,overwriteAnalysis=True):
 		diag = 'HASO'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -357,10 +357,15 @@ class dataRun:
 			if useChamberCalibration:
 				if getIndividualShots:
 					for shotFile in filePathDict[burstStr]:
-						analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(shotFile,zernikeOffsets)
-						# Save the data
-						analysisSavePath = os.path.join(analysisPath,burstStr,shotFile[-9:-4])
-						self.saveData(analysisSavePath,analysedData)
+						# Check if analysis already exists:
+						fileCheck = os.path.exists(os.path.join(analysisPath,burstStr,shotFile[-9:-4]+'.npy'))
+						if fileCheck and not overwriteAnalysis:
+							print(burstStr + ' ' + shotFile[-9:-4] +': Already Analysed')
+						else:
+							analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(shotFile,zernikeOffsets)
+							# Save the data
+							analysisSavePath = os.path.join(analysisPath,burstStr,shotFile[-9:-4])
+							self.saveData(analysisSavePath,analysedData)
 				else:
 					analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(filePathDict[burstStr],zernikeOffsets)
 					# Save the data
@@ -370,10 +375,15 @@ class dataRun:
 			else:
 				if getIndividualShots:
 					for shotFile in filePathDict[burstStr]:
-						analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(shotFile)
-						# Save the data
-						analysisSavePath = os.path.join(analysisPath,burstStr,shotFile[-9:-4])
-						self.saveData(analysisSavePath,analysedData)
+						# Check if analysis already exists:
+						fileCheck = os.path.exists(os.path.join(analysisPath,burstStr,shotFile[-9:-4]+'.npy'))
+						if fileCheck and not overwriteAnalysis:
+							print(burstStr + ' ' + shotFile[-9:-4] +': Already Analysed')
+						else:
+							analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(shotFile)
+							# Save the data
+							analysisSavePath = os.path.join(analysisPath,burstStr,shotFile[-9:-4])
+							self.saveData(analysisSavePath,analysedData)
 				else:
 					analysedData = HASOAnalysis.extractWavefrontInfo(filePathDict[burstStr])
 					# Save the data
