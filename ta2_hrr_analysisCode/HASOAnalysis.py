@@ -687,12 +687,20 @@ def getZernikeCoefficients(X,Y,pupil,phase,numZernikes=36):
     
 	pupilCoords = getPupilCoords(X,Y,pupil)
 	(cgx,cgy,r) = pupilCoords
-	dx = (X[1]-X[0])/r
-	dy = (Y[1]-Y[0])/r
+
+	# Scale everything to a unit radius pupil
+	X = X/r
+	Y = Y/r
+	pupilCoordsScaled = (cgx/r,cgy/r,1) 
+
+	dx = (X[1]-X[0])
+	dy = (Y[1]-Y[0])
+	#dx = (X[1]-X[0])/r
+	#dy = (Y[1]-Y[0])/r
 
 	zList = np.zeros(numZernikes,)
 	for i in range(numZernikes):
-		Zj = zernike(X,Y,pupilCoords,i)
+		Zj = zernike(X,Y,pupilCoordsScaled,i)
 		Zj[np.isnan(Zj)]=0
 		phase[np.isnan(phase)]=0
 		integral = trapz(trapz(Zj*phase,dx=dx,axis=1),dx=dy,axis=0)
@@ -700,11 +708,34 @@ def getZernikeCoefficients(X,Y,pupil,phase,numZernikes=36):
 	return zList,pupilCoords
 
 def removeTiltFocus(X,Y,phase,zList,pupilCoords):
+	# Scale everything to a unit radius pupil
+	(cgx,cgy,r) = pupilCoords
+	X = X/r
+	Y = Y/r
+	pupilCoords = (cgx/r,cgy/r,1) 
+
 	phasePTFR = phase-zList[0]*zernike(X,Y,pupilCoords,0) - zList[1]*zernike(X,Y,pupilCoords,1)-zList[2]*zernike(X,Y,pupilCoords,2)-zList[4]*zernike(X,Y,pupilCoords,4)
 	return phasePTFR
 
+def removeAstigmatism(X,Y,phase,zList,pupilCoords):
+	# Scale everything to a unit radius pupil
+	(cgx,cgy,r) = pupilCoords
+	X = X/r
+	Y = Y/r
+	pupilCoords = (cgx/r,cgy/r,1) 
+
+	phaseNoAstig = phase-zList[3]*zernike(X,Y,pupilCoords,3) - zList[5]*zernike(X,Y,pupilCoords,5)
+	return phaseNoAstig
+
+
 def createWavefront(X,Y,zList,pupilCoords):
 	'''Given a set of zernike coefficents, create a wavefront'''
+	
+	# Scale everything to a unit radius pupil
+	(cgx,cgy,r) = pupilCoords
+	X = X/r
+	Y = Y/r
+	pupilCoords = (cgx/r,cgy/r,1) 
 
 	phase = np.zeros((len(Y),len(X)))
 	
@@ -756,3 +787,4 @@ def createReference(inChamberHas,leakageHas):
 	(XLK,YLK,phaseLK,intensityLK,pupilLK,pupilCoordsLK,zernikeCoeffsLK) = extractWavefrontInfo(leakageHas)
 
 	return zernikeCoeffsIC_rot-zernikeCoeffsLK
+
