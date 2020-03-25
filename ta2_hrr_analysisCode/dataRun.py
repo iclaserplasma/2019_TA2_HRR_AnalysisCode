@@ -16,12 +16,12 @@ except ModuleNotFoundError:
 from datetime import datetime
 
 # IMPORT DIAGNOSTIC CODES
-import SPIDERAnalysis
-import HASOAnalysis
-import ESpecAnalysis
-import PreCompNFAnalysis
-import XRayAnalysis 
-import probe_density_extraction 
+
+
+
+
+
+
 
 
 class dataRun:
@@ -70,7 +70,6 @@ class dataRun:
 			loggingAnalysisFolder 	= self.createAnalysisFolder()
 			self.loggerFile 		= oldRun.loggerFile
 			self.logThatShit('Analysis Continued\n')
-			
 
 			self.diagList 			= oldRun.diagList
 			self.datStyle 			= oldRun.datStyle
@@ -111,8 +110,6 @@ class dataRun:
 
 			# Collect SQL Data
 			self.collectSQLData()
-
-
 
 	def findAvailableDiagnostics(self,runDate,runName):
 		'''
@@ -215,7 +212,6 @@ class dataRun:
 				print('\n\nGeneral Analysis folder already exists\n{}\n'.format(analysisPath))
 		return(analysisPath)
 
-
 	def collectSQLData(self):
 		db = connectToSQL(True)
 		runName = self.runName
@@ -241,9 +237,6 @@ class dataRun:
 		self.saveData(os.path.join(analysisPath,'gasCellLength'),gasCellLength)
 
 
-
-
-
 	# -------------------------------------------------------------------------------------------------------------------
 	# -----										DIAGNOSTIC FUNCTION CALLS 											-----
 	# -------------------------------------------------------------------------------------------------------------------
@@ -251,6 +244,7 @@ class dataRun:
 	# PROBE ANALYSIS
 	def performProbeDensityAnalysis(self, overwrite = True, verbose = False, visualise = False, 
 				Debugging = False):
+		import probe_density_extraction 
 		diag = 'Probe_Interferometry'
 		print ("In ", diag)
 
@@ -287,6 +281,7 @@ class dataRun:
 	def performESpecAnalysis(self,useCalibration=True,overwriteData=False):
 		# Load the espec images for the run and analyse
 		# if it exists get it, if not, run initESpecAnalysis and update log
+		import ESpecAnalysis
 		diag = 'HighESpec'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -310,10 +305,9 @@ class dataRun:
 			self.logThatShit('Performed HighESpec Analysis for ' + burstStr)
 			print('Analysed ESpec Spectrum, Charge, totalEnergy, cutoffEnergy95 for Burst '+ burstStr)
 
-
-
-	# SPIDER ANALYSIS CALLS -- THIS IS CURRENTLY JUST AN EXAMPLE
+	# SPIDER ANALYSIS CALLS 
 	def performSPIDERAnalysis(self):
+		import SPIDERAnalysis
 		diag = 'SPIDER'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -334,10 +328,9 @@ class dataRun:
 			print('Analysed SPIDER '+ burstStr)
 		return 0
 
-
-
 	# HASO Analysis
 	def performHASOAnalysis(self,useChamberCalibration=True,getIndividualShots=False,overwriteAnalysis=True):
+		import HASOAnalysis
 		diag = 'HASO'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -384,9 +377,9 @@ class dataRun:
 			self.logThatShit('Performed HASO Analysis for ' + burstStr)
 			print('Analysed HASO '+ burstStr)
 
-
 	# PRE COMP NF (BEAM ENERGY) Anlaysis
 	def performPreCompNFAnalysis(self):
+		import PreCompNFAnalysis
 		diag = 'PreCompNF'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -412,9 +405,9 @@ class dataRun:
 			print('Performed NF Analysis for ' + burstStr +'. Avg Pulse Energy On Target = ' +  energyStr)
 		return 0	
 
-
 	# X-Ray Anlaysis
 	def performXRayAnalysis(self,justGetCounts=False):
+		import XRayAnalysis 
 		diag = 'XRay'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
