@@ -1,3 +1,11 @@
+# dataRun.py
+# 
+
+# Authors:          Rob Shalloo, Matt Streeter & Nic Gruse
+# Affiliation:      Imperial College London
+# Creation Date:    2020
+
+
 import os
 import matplotlib.pyplot as plt
 import numpy as np 
