@@ -10,7 +10,7 @@ import glob
 from pathlib import Path
 
 try:
-	import cPickle as pickle
+	import cPickle as pickle # only for python2
 except ModuleNotFoundError:
 	import pickle
 from datetime import datetime
@@ -215,13 +215,13 @@ class dataRun:
 	def collectSQLData(self):
 		analysisPath,isItReal = self.getDiagAnalysisPath('General')
 		gasCellCsvFilePath = os.path.join(analysisPath,'GasCell.csv')
+		runName = self.runName
+		runDate = self.runDate
 		if os.path.isfile(gasCellCsvFilePath):
 			gasCell_df = pd.read_csv(gasCellCsvFilePath)
 		else:
-			from sqlDatabase import connectToSQL
+			from .sqlDatabase import connectToSQL
 			db = connectToSQL(True)
-			runName = self.runName
-			runDate = self.runDate
 			keys = ['run','shot_or_burst','GasCellPressure','GasCellLength']
 
 			# Get all data pertaining to the run
@@ -253,7 +253,7 @@ class dataRun:
 	# PROBE ANALYSIS
 	def performProbeDensityAnalysis(self, overwrite = True, verbose = False, visualise = False, 
 				Debugging = False):
-		import probe_density_extraction 
+		from . import probe_density_extraction 
 		diag = 'Probe_Interferometry'
 		print ("In ", diag)
 
@@ -290,7 +290,7 @@ class dataRun:
 	def performESpecAnalysis(self,useCalibration=True,overwriteData=False):
 		# Load the espec images for the run and analyse
 		# if it exists get it, if not, run initESpecAnalysis and update log
-		import ESpecAnalysis
+		from . import ESpecAnalysis
 		diag = 'HighESpec'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -316,7 +316,7 @@ class dataRun:
 
 	# SPIDER ANALYSIS CALLS 
 	def performSPIDERAnalysis(self):
-		import SPIDERAnalysis
+		from . import SPIDERAnalysis
 		diag = 'SPIDER'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -339,7 +339,7 @@ class dataRun:
 
 	# HASO Analysis
 	def performHASOAnalysis(self,useChamberCalibration=True,getIndividualShots=False,overwriteAnalysis=True):
-		import HASOAnalysis
+		from . import HASOAnalysis
 		diag = 'HASO'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -388,7 +388,7 @@ class dataRun:
 
 	# PRE COMP NF (BEAM ENERGY) Anlaysis
 	def performPreCompNFAnalysis(self):
-		import PreCompNFAnalysis
+		from . import PreCompNFAnalysis
 		diag = 'PreCompNF'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -416,7 +416,7 @@ class dataRun:
 
 	# X-Ray Anlaysis
 	def performXRayAnalysis(self,justGetCounts=False):
-		import XRayAnalysis 
+		from . import XRayAnalysis 
 		diag = 'XRay'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
