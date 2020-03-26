@@ -307,7 +307,7 @@ def intgrad2(fx,fy,X,Y,f00):
 	Tmp = A.toarray()[:,0]
 
 	Tmp = Tmp.flatten()
-	print(np.shape(f00))
+	
 	rhs = rhs - Tmp*f00
 	
 	X = lsqr(A, rhs)
