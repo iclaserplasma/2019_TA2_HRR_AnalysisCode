@@ -1,8 +1,8 @@
 import os
 import matplotlib.pyplot as plt
 import numpy as np 
+import pandas as pd
 from scipy.signal import medfilt
-from sqlDatabase import connectToSQL
 import logging
 import csv 
 import glob
@@ -213,28 +213,37 @@ class dataRun:
 		return(analysisPath)
 
 	def collectSQLData(self):
-		db = connectToSQL(True)
-		runName = self.runName
-		runDate = self.runDate
-
-		# Get all data pertaining to the run
-		cursor = db.cursor()
-		command = "SELECT shot_or_burst,GasCellPressure,GasCellLength FROM shot_data WHERE run='"+runDate+"/"+runName+"'"
-		
-		cursor.execute(command)
-		SQLData = cursor.fetchall() ## it returns list of tables present in the database
-		## showing all the tables one by one
-		gasCellPressure = {}
-		gasCellLength = {}
-
-		for datum in SQLData:
-			shotOrBurst,Pressure,Length = datum
-			gasCellPressure[shotOrBurst] = Pressure
-			gasCellLength[shotOrBurst] = Length
-
 		analysisPath,isItReal = self.getDiagAnalysisPath('General')
+		gasCellCsvFilePath = os.path.join(analysisPath,'GasCell.csv')
+		if os.path.isfile(gasCellCsvFilePath):
+			gasCell_df = pd.read_csv(gasCellCsvFilePath)
+		else:
+			from sqlDatabase import connectToSQL
+			db = connectToSQL(True)
+			runName = self.runName
+			runDate = self.runDate
+			keys = ['run','shot_or_burst','GasCellPressure','GasCellLength']
+
+			# Get all data pertaining to the run
+			cursor = db.cursor()
+			command = "SELECT " + '%s,%s,%s,%s' % tuple(keys) + ' FROM shot_data'
+
+			cursor.execute(command)
+			SQLData = cursor.fetchall() ## it returns list of tables present in the database
+			gasCell_df = pd.DataFrame(SQLData,columns=keys)
+			gasCell_df.to_csv(gasCellCsvFilePath,index=False)
+		
+
+		## showing all the tables one by one
+		runSel = gasCell_df['run']==runName
+		gasCellPressure = gasCell_df[runSel]['GasCellPressure'].values
+		gasCellLength = gasCell_df[runSel]['GasCellLength'].values
+
+		
 		self.saveData(os.path.join(analysisPath,'GasCellPressure'),gasCellPressure)
 		self.saveData(os.path.join(analysisPath,'gasCellLength'),gasCellLength)
+
+		
 
 
 	# -------------------------------------------------------------------------------------------------------------------
@@ -539,7 +548,7 @@ class dataRun:
 		return (img - bgLevel)
 
 
-	def createDataBuckets(arr):
+	def createDataBuckets(self,arr):
 		# Bin the data using too many (although still a reasonable amount of) bins.
 		numElements = round(len(arr)/2)
 		bins = np.linspace(np.amin(arr),np.amax(arr),numElements)
