@@ -99,6 +99,7 @@ def extractWavefrontInfo(dataFile,verbose=False):
 
 
 	# Fially, convert xSlopes and ySlopes to phase information
+
 	(X,Y,phase,intensity,pupil) = convertSlopesToPhase(X,Y,xSlopes,ySlopes,intensity,pupil)
 
 	# And finally, finally, get Zernike Coefficients
@@ -303,13 +304,14 @@ def intgrad2(fx,fy,X,Y,f00):
 	A2 = csr_matrix((Af[:,5] , (Af[:,1].astype(int) ,(Af[:,3]).astype(int))),shape=(2*nx*ny,nx*ny))
 	A = A1+A2
 
-	Tmp = np.zeros(len(rhs),)
-	for i in range(len(rhs)):
-	    Tmp[i] = A[i,0]
-	    
-	rhs = rhs - Tmp*f00
+	Tmp = A.toarray()[:,0]
 
+	Tmp = Tmp.flatten()
+	print(np.shape(f00))
+	rhs = rhs - Tmp*f00
+	
 	X = lsqr(A, rhs)
+	
 	X = np.transpose(np.reshape(X[0],(nx,ny)))
 
 	return(X)
@@ -404,7 +406,9 @@ def convertSlopesToPhase(X,Y,xSlopes,ySlopes,intensity,pupil):
 	# THE factor of 1000 is becaue the phase slopes are in units of um/mm
 	# When we integrated we integrated using units of microns rather than mm
 	# thus the factor of 1000 converts us to um.
+
 	phase = intgrad2(xSlopesI,ySlopesI,X,Y,0)
+
 	phase = phase*newPupil/1000
 
 	# Now convert from microns to radians
@@ -417,23 +421,23 @@ def convertSlopesToPhase(X,Y,xSlopes,ySlopes,intensity,pupil):
 
 
 def reGridData(x,y,dat,resX,resY,Nx,Ny,verbose=False):
-    ''' Re Gridding data dat from a grid defined by x and y
-    on to a new grid Nx by Ny which has grid spacing resX and resY
-    The input beam should be centered on (0,0) which should be the middle of the grid'''
-    
-    # Create the function for interpolating the data
-    interFn = RegularGridInterpolator((y,x), dat,bounds_error=False,fill_value=np.nan)
-    
-    # Target Grid
-    xNew = np.linspace(-resX*Nx/2,resX*Nx/2 - resX ,Nx)
-    yNew = np.linspace(-resY*Ny/2,resY*Ny/2 - resY ,Ny)
-    regriddedData = np.zeros((Ny,Nx),dtype=float)
+	''' Re Gridding data dat from a grid defined by x and y
+	on to a new grid Nx by Ny which has grid spacing resX and resY
+	The input beam should be centered on (0,0) which should be the middle of the grid'''
 
-    for i in range(Nx):
-    	for j in range(Ny):
-    		regriddedData[j][i] = interFn([yNew[j],xNew[i]])
+	# Create the function for interpolating the data
+	interFn = RegularGridInterpolator((y,x), dat,bounds_error=False,fill_value=np.nan)
 
-    return (xNew,yNew, regriddedData)
+	# Target Grid
+	xNew = np.linspace(-resX*Nx/2,resX*Nx/2 - resX ,Nx)
+	yNew = np.linspace(-resY*Ny/2,resY*Ny/2 - resY ,Ny)
+	[XM,YM] = np.meshgrid(xNew,yNew)
+	regriddedData = interFn((YM,XM))
+	# for i in range(Nx):
+	# 	for j in range(Ny):
+	# 		regriddedData[j][i] = interFn([yNew[j],xNew[i]])
+
+	return (xNew,yNew, regriddedData)
 
 
 def zernike(X,Y,pupilCoords,j):
