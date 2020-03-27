@@ -259,7 +259,11 @@ class dataRun:
 	# PROBE ANALYSIS
 	def performProbeDensityAnalysis(self, overwrite = True, verbose = False, visualise = False, 
 				Debugging = False):
-		from . import probe_density_extraction 
+		try:
+			from . import probe_density_extraction
+		except:
+			import probe_density_extraction
+		
 		diag = 'Probe_Interferometry'
 		print ("In ", diag)
 
@@ -296,7 +300,11 @@ class dataRun:
 	def performESpecAnalysis(self,useCalibration=True,overwriteData=False):
 		# Load the espec images for the run and analyse
 		# if it exists get it, if not, run initESpecAnalysis and update log
-		from . import ESpecAnalysis
+		try:
+			from . import ESpecAnalysis
+		except:
+			import ESpecAnalysis
+		
 		diag = 'HighESpec'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -322,7 +330,11 @@ class dataRun:
 
 	# SPIDER ANALYSIS CALLS 
 	def performSPIDERAnalysis(self):
-		from . import SPIDERAnalysis
+		try:
+			from . import SPIDERAnalysis
+		except:
+			import SPIDERAnalysis
+		
 		diag = 'SPIDER'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -398,7 +410,11 @@ class dataRun:
 
 	# PRE COMP NF (BEAM ENERGY) Anlaysis
 	def performPreCompNFAnalysis(self):
-		from . import PreCompNFAnalysis
+		try:
+			from . import PreCompNFAnalysis
+		except:
+			import PreCompNFAnalysis
+		
 		diag = 'PreCompNF'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -426,7 +442,11 @@ class dataRun:
 
 	# X-Ray Anlaysis
 	def performXRayAnalysis(self,justGetCounts=False):
-		from . import XRayAnalysis 
+		try:
+			from . import XRayAnalysis
+		except:
+			import XRayAnalysis
+		
 		diag = 'XRay'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
