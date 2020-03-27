@@ -23,8 +23,6 @@ except ModuleNotFoundError:
 	import pickle
 from datetime import datetime
 
-# IMPORT DIAGNOSTIC CODES
-
 
 
 
@@ -347,7 +345,11 @@ class dataRun:
 
 	# HASO Analysis
 	def performHASOAnalysis(self,useChamberCalibration=True,getIndividualShots=False,overwriteAnalysis=True):
-		from . import HASOAnalysis
+		try:
+			from . import HASOAnalysis
+		except:
+			import HASOAnalysis
+			
 		diag = 'HASO'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
