@@ -9,8 +9,8 @@
 import os
 import matplotlib.pyplot as plt
 import numpy as np 
+import pandas as pd
 from scipy.signal import medfilt
-from sqlDatabase import connectToSQL
 import logging
 import csv 
 import glob
@@ -18,18 +18,18 @@ import glob
 from pathlib import Path
 
 try:
-	import cPickle as pickle
+	import cPickle as pickle # only for python2
 except ModuleNotFoundError:
 	import pickle
 from datetime import datetime
 
 # IMPORT DIAGNOSTIC CODES
-import SPIDERAnalysis
-import HASOAnalysis
-import ESpecAnalysis
-import PreCompNFAnalysis
-import XRayAnalysis 
-import probe_density_extraction 
+
+
+
+
+
+
 
 
 class dataRun:
@@ -78,7 +78,6 @@ class dataRun:
 			loggingAnalysisFolder 	= self.createAnalysisFolder()
 			self.loggerFile 		= oldRun.loggerFile
 			self.logThatShit('Analysis Continued\n')
-			
 
 			self.diagList 			= oldRun.diagList
 			self.datStyle 			= oldRun.datStyle
@@ -119,8 +118,6 @@ class dataRun:
 
 			# Collect SQL Data
 			self.collectSQLData()
-
-
 
 	def findAvailableDiagnostics(self,runDate,runName):
 		'''
@@ -223,33 +220,38 @@ class dataRun:
 				print('\n\nGeneral Analysis folder already exists\n{}\n'.format(analysisPath))
 		return(analysisPath)
 
-
 	def collectSQLData(self):
-		db = connectToSQL(True)
+		analysisPath,isItReal = self.getDiagAnalysisPath('General')
+		gasCellCsvFilePath = os.path.join(analysisPath,'GasCell.csv')
 		runName = self.runName
 		runDate = self.runDate
+		if os.path.isfile(gasCellCsvFilePath):
+			gasCell_df = pd.read_csv(gasCellCsvFilePath)
+		else:
+			from .sqlDatabase import connectToSQL
+			db = connectToSQL(True)
+			keys = ['run','shot_or_burst','GasCellPressure','GasCellLength']
 
-		# Get all data pertaining to the run
-		cursor = db.cursor()
-		command = "SELECT shot_or_burst,GasCellPressure,GasCellLength FROM shot_data WHERE run='"+runDate+"/"+runName+"'"
+			# Get all data pertaining to the run
+			cursor = db.cursor()
+			command = "SELECT " + '%s,%s,%s,%s' % tuple(keys) + ' FROM shot_data'
+
+			cursor.execute(command)
+			SQLData = cursor.fetchall() ## it returns list of tables present in the database
+			gasCell_df = pd.DataFrame(SQLData,columns=keys)
+			gasCell_df.to_csv(gasCellCsvFilePath,index=False)
 		
-		cursor.execute(command)
-		SQLData = cursor.fetchall() ## it returns list of tables present in the database
+
 		## showing all the tables one by one
-		gasCellPressure = {}
-		gasCellLength = {}
+		runSel = gasCell_df['run']==runName
+		gasCellPressure = gasCell_df[runSel]['GasCellPressure'].values
+		gasCellLength = gasCell_df[runSel]['GasCellLength'].values
 
-		for datum in SQLData:
-			shotOrBurst,Pressure,Length = datum
-			gasCellPressure[shotOrBurst] = Pressure
-			gasCellLength[shotOrBurst] = Length
-
-		analysisPath,isItReal = self.getDiagAnalysisPath('General')
+		
 		self.saveData(os.path.join(analysisPath,'GasCellPressure'),gasCellPressure)
 		self.saveData(os.path.join(analysisPath,'gasCellLength'),gasCellLength)
 
-
-
+		
 
 
 	# -------------------------------------------------------------------------------------------------------------------
@@ -259,6 +261,7 @@ class dataRun:
 	# PROBE ANALYSIS
 	def performProbeDensityAnalysis(self, overwrite = True, verbose = False, visualise = False, 
 				Debugging = False):
+		from . import probe_density_extraction 
 		diag = 'Probe_Interferometry'
 		print ("In ", diag)
 
@@ -295,6 +298,7 @@ class dataRun:
 	def performESpecAnalysis(self,useCalibration=True,overwriteData=False):
 		# Load the espec images for the run and analyse
 		# if it exists get it, if not, run initESpecAnalysis and update log
+		from . import ESpecAnalysis
 		diag = 'HighESpec'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -318,10 +322,9 @@ class dataRun:
 			self.logThatShit('Performed HighESpec Analysis for ' + burstStr)
 			print('Analysed ESpec Spectrum, Charge, totalEnergy, cutoffEnergy95 for Burst '+ burstStr)
 
-
-
-	# SPIDER ANALYSIS CALLS -- THIS IS CURRENTLY JUST AN EXAMPLE
+	# SPIDER ANALYSIS CALLS 
 	def performSPIDERAnalysis(self):
+		from . import SPIDERAnalysis
 		diag = 'SPIDER'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -342,10 +345,9 @@ class dataRun:
 			print('Analysed SPIDER '+ burstStr)
 		return 0
 
-
-
 	# HASO Analysis
 	def performHASOAnalysis(self,useChamberCalibration=True,getIndividualShots=False,overwriteAnalysis=True):
+		from . import HASOAnalysis
 		diag = 'HASO'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -392,9 +394,9 @@ class dataRun:
 			self.logThatShit('Performed HASO Analysis for ' + burstStr)
 			print('Analysed HASO '+ burstStr)
 
-
 	# PRE COMP NF (BEAM ENERGY) Anlaysis
 	def performPreCompNFAnalysis(self):
+		from . import PreCompNFAnalysis
 		diag = 'PreCompNF'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -420,9 +422,9 @@ class dataRun:
 			print('Performed NF Analysis for ' + burstStr +'. Avg Pulse Energy On Target = ' +  energyStr)
 		return 0	
 
-
 	# X-Ray Anlaysis
 	def performXRayAnalysis(self,justGetCounts=False):
+		from . import XRayAnalysis 
 		diag = 'XRay'
 		filePathDict = self.createRunPathLists(diag)
 		analysisPath, pathExists = self.getDiagAnalysisPath(diag)
@@ -554,7 +556,7 @@ class dataRun:
 		return (img - bgLevel)
 
 
-	def createDataBuckets(arr):
+	def createDataBuckets(self,arr):
 		# Bin the data using too many (although still a reasonable amount of) bins.
 		numElements = round(len(arr)/2)
 		bins = np.linspace(np.amin(arr),np.amax(arr),numElements)
