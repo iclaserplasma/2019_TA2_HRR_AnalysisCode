@@ -322,7 +322,7 @@ class dataRun:
 			if useCalibration:
 				for shotFile in filePathDict[burstStr]:
 					shotID = shotFile.split('\\')[-1].split('.')[0]
-					analysedData = ESpecAnalysis.ESpecSCEC(shotFile,eSpecCalib)
+					analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile,eSpecCalib)
 					# Save the data
 					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis'+shotID)
 					self.saveData(analysisSavePath,analysedData)
@@ -330,7 +330,7 @@ class dataRun:
 			else:
 				for shotFile in filePathDict[burstStr]:
 					shotID = shotFile.split('\\')[-1].split('.')[0]
-					analysedData = ESpecAnalysis.ESpecSCEC(shotFile)
+					analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile)
 					# Save the data
 					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_NoCalibration'+shotID)
 					self.saveData(analysisSavePath,analysedData)
@@ -1300,9 +1300,9 @@ class dataRun:
 		''' Retrieves the Analysed ESpec data
 
 		Each analysed image has data stored in the form 
-		WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95
-
+		WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95,
 		'''
+		
 		baseAnalysisFolder = self.baseAnalysisFolder
 		runDate = self.runDate
 		runName = self.runName
