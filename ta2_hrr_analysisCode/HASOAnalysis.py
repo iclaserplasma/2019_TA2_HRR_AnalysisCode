@@ -304,7 +304,7 @@ def intgrad2(fx,fy,X,Y,f00):
 	A2 = csr_matrix((Af[:,5] , (Af[:,1].astype(int) ,(Af[:,3]).astype(int))),shape=(2*nx*ny,nx*ny))
 	A = A1+A2
 
-	Tmp = A.toarray()[:,0]
+	Tmp = A[:,0].toarray()
 
 	Tmp = Tmp.flatten()
 	
