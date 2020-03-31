@@ -320,16 +320,20 @@ class dataRun:
 
 		for burstStr in filePathDict.keys():		
 			if useCalibration:
-				analysedData = ESpecAnalysis.ESpecSCEC(filePathDict[burstStr],eSpecCalib)
-				# Save the data
-				analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis')
-				self.saveData(analysisSavePath,analysedData)
+				for shotFile in filePathDict[burstStr]:
+					shotID = shotFile.split('\\')[-1].split('.')[0]
+					analysedData = ESpecAnalysis.ESpecSCEC(shotFile,eSpecCalib)
+					# Save the data
+					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis'+shotID)
+					self.saveData(analysisSavePath,analysedData)
 
 			else:
-				analysedData = ESpecAnalysis.ESpecSCEC(filePathDict[burstStr])
-				# Save the data
-				analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_NoCalibration')
-				self.saveData(analysisSavePath,analysedData)
+				for shotFile in filePathDict[burstStr]:
+					shotID = shotFile.split('\\')[-1].split('.')[0]
+					analysedData = ESpecAnalysis.ESpecSCEC(shotFile)
+					# Save the data
+					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_NoCalibration'+shotID)
+					self.saveData(analysisSavePath,analysedData)
 			self.logThatShit('Performed HighESpec Analysis for ' + burstStr)
 			print('Analysed ESpec Spectrum, Charge, totalEnergy, cutoffEnergy95 for Burst '+ burstStr)
 
@@ -1291,6 +1295,117 @@ class dataRun:
 			return shotID_sorted, z4_sorted , focusShift
 		else:
 			return shotID_sorted, z4_sorted
+
+	def loadAnalysedESpec(self,getShots=False,removeDuds=False):
+		''' Retrieves the Analysed ESpec data
+
+		Each analysed image has data stored in the form 
+		WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95
+
+		'''
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+
+		diag = 'HighESpec'
+			
+		runDir = os.path.join(baseAnalysisFolder , diag,  runDate , runName)
+		bursts = [f for f in os.listdir(runDir) if not f.startswith('.')]
+			
+
+		if getShots:
+			# Get individual shots
+			GDD = []
+			TOD = []
+			FOD = []
+			shotID = []
+			for burst in bursts:
+				burstDir = os.path.join(runDir,burst)
+				shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
+				for shot in shots:
+					shotPath = os.path.join(burstDir,shot)
+					timeProfile, specPhaseOrders = np.load(shotPath,allow_pickle=True) 
+					# Check for duds
+					t,I = timeProfile
+					indxs = np.argwhere(np.abs(t)>400) # places further than 400 fs from the middle
+					testSum = np.sum(I[indxs])
+					if testSum < 1 or removeDuds is False:
+						for elem in shot.replace('.','_').split('_'):
+							if 'Shot' in elem:
+								shotName = elem
+						shotID.append((burst+shotName))
+						GDD.append(specPhaseOrders[0])
+						TOD.append(specPhaseOrders[1])
+						FOD.append(specPhaseOrders[2])
+							
+		else:
+			GDD = []
+			TOD = []
+			FOD = []
+			shotID = []
+			
+			for burst in bursts:
+				burstDir = os.path.join(runDir,burst)
+				shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
+
+				tmpGDD = []
+				tmpTOD = []
+				tmpFOD = []
+				
+				for shot in shots:
+					shotPath = os.path.join(burstDir,shot)
+					timeProfile, specPhaseOrders = np.load(shotPath,allow_pickle=True) 
+				
+					# Check for duds
+					t,I = timeProfile
+					indxs = np.argwhere(np.abs(t)>400) # places further than 400 fs from the middle
+					testSum = np.sum(I[indxs])
+					if testSum < 1 or removeDuds is False:
+						tmpGDD.append(specPhaseOrders[0])
+						tmpTOD.append(specPhaseOrders[1])
+						tmpFOD.append(specPhaseOrders[2])
+						
+				shotID.append(burst)        
+				GDD.append((np.mean(tmpGDD),np.std(tmpGDD)))
+				TOD.append((np.mean(tmpTOD),np.std(tmpTOD)))
+				FOD.append((np.mean(tmpFOD),np.std(tmpFOD)))
+
+		if 'Shot' in shotID[0]:
+			# Shots
+			burstNums = []
+			shotNums = []
+			for burstShot in shotID:
+				# Split up burst and shot strings
+				tmpSpl = burstShot.split('S')
+				tmpSpl[1] = 'S'+tmpSpl[1]
+				burst = tmpSpl[0]
+				shot = tmpSpl[1]
+
+				burstNums.append(int(burst[5:]))
+				shotNums.append(int(shot[4:]))
+			orderVal = []
+			maxShotsInBurst = np.amax(shotNums)
+			for i in range(len(burstNums)):
+				orderVal.append((burstNums[i]-1)*maxShotsInBurst+shotNums[i])
+			indxOrder = np.argsort(orderVal)
+			shotID_sorted = np.asarray(shotID)[indxOrder]
+			GDD_sorted = np.asarray(GDD)[indxOrder] 
+			TOD_sorted = np.asarray(TOD)[indxOrder] 
+			FOD_sorted = np.asarray(FOD)[indxOrder] 
+		else:
+			# bursts
+			burstNums = []
+			for burst in shotID:
+				burstNums.append(int(burst[5:]))
+			indxOrder = np.argsort(burstNums)
+			shotID_sorted = np.asarray(shotID)[indxOrder]
+			GDD_sorted = np.asarray(GDD)[indxOrder] 
+			TOD_sorted = np.asarray(TOD)[indxOrder] 
+			FOD_sorted = np.asarray(FOD)[indxOrder] 
+				
+		return shotID_sorted , GDD_sorted, TOD_sorted,FOD_sorted
+		
+
 
 # HELPER FUNCTIONS 
 def getSortedFolderItems(itemPath,key):
