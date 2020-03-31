@@ -379,13 +379,14 @@ class dataRun:
 				if getIndividualShots:
 					for shotFile in filePathDict[burstStr]:
 						# Check if analysis already exists:
-						fileCheck = os.path.exists(os.path.join(analysisPath,burstStr,shotFile[-9:-4]+'.npy'))
+						shotID = shotFile.split('\\')[-1].split('.')[0]
+						fileCheck = os.path.exists(os.path.join(analysisPath,burstStr,shotID+'.npy'))
 						if fileCheck and not overwriteAnalysis:
-							print(burstStr + ' ' + shotFile[-9:-4] +': Already Analysed')
+							print(burstStr + ' ' + shotID +': Already Analysed')
 						else:
 							analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(shotFile,zernikeOffsets)
 							# Save the data
-							analysisSavePath = os.path.join(analysisPath,burstStr,shotFile[-9:-4])
+							analysisSavePath = os.path.join(analysisPath,burstStr,shotID)
 							self.saveData(analysisSavePath,analysedData)
 				else:
 					analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(filePathDict[burstStr],zernikeOffsets)
@@ -397,13 +398,14 @@ class dataRun:
 				if getIndividualShots:
 					for shotFile in filePathDict[burstStr]:
 						# Check if analysis already exists:
-						fileCheck = os.path.exists(os.path.join(analysisPath,burstStr,shotFile[-9:-4]+'.npy'))
+						shotID = shotFile.split('\\')[-1].split('.')[0]
+						fileCheck = os.path.exists(os.path.join(analysisPath,burstStr,shotID+'.npy'))
 						if fileCheck and not overwriteAnalysis:
-							print(burstStr + ' ' + shotFile[-9:-4] +': Already Analysed')
+							print(burstStr + ' ' + shotID +': Already Analysed')
 						else:
 							analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(shotFile)
 							# Save the data
-							analysisSavePath = os.path.join(analysisPath,burstStr,shotFile[-9:-4])
+							analysisSavePath = os.path.join(analysisPath,burstStr,shotID)
 							self.saveData(analysisSavePath,analysedData)
 				else:
 					analysedData = HASOAnalysis.extractWavefrontInfo(filePathDict[burstStr])
