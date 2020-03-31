@@ -324,7 +324,7 @@ class dataRun:
 					shotID = shotFile.split('\\')[-1].split('.')[0]
 					analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile,eSpecCalib)
 					# Save the data
-					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis'+shotID)
+					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_'+shotID)
 					self.saveData(analysisSavePath,analysedData)
 
 			else:
@@ -332,10 +332,10 @@ class dataRun:
 					shotID = shotFile.split('\\')[-1].split('.')[0]
 					analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile)
 					# Save the data
-					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_NoCalibration'+shotID)
+					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_NoCalibration_'+shotID)
 					self.saveData(analysisSavePath,analysedData)
 			self.logThatShit('Performed HighESpec Analysis for ' + burstStr)
-			print('Analysed ESpec Spectrum, Charge, totalEnergy, cutoffEnergy95 for Burst '+ burstStr)
+			print('Analysed ESpec Spectrum, Charge, totalEnergy, cutoffEnergy95 for '+ burstStr)
 
 	# SPIDER ANALYSIS CALLS 
 	def performSPIDERAnalysis(self):
@@ -1296,7 +1296,7 @@ class dataRun:
 		else:
 			return shotID_sorted, z4_sorted
 
-	def loadAnalysedESpec(self,getShots=False,removeDuds=False):
+	def loadAnalysedESpec(self,getShots=False):
 		''' Retrieves the Analysed ESpec data
 
 		Each analysed image has data stored in the form 
@@ -1315,28 +1315,27 @@ class dataRun:
 
 		if getShots:
 			# Get individual shots
-			GDD = []
-			TOD = []
-			FOD = []
+			Spectrum2D = []
+			Spectrum1D = []
+			Charge = []
+			totalEnergy = []
+			cutoffEnergy95 = []
 			shotID = []
 			for burst in bursts:
 				burstDir = os.path.join(runDir,burst)
 				shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
 				for shot in shots:
 					shotPath = os.path.join(burstDir,shot)
-					timeProfile, specPhaseOrders = np.load(shotPath,allow_pickle=True) 
-					# Check for duds
-					t,I = timeProfile
-					indxs = np.argwhere(np.abs(t)>400) # places further than 400 fs from the middle
-					testSum = np.sum(I[indxs])
-					if testSum < 1 or removeDuds is False:
-						for elem in shot.replace('.','_').split('_'):
+					spec2d, spec1D, chrge, Etot, ECutOff = np.load(shotPath,allow_pickle=True) 
+					for elem in shot.replace('.','_').split('_'):
 							if 'Shot' in elem:
 								shotName = elem
-						shotID.append((burst+shotName))
-						GDD.append(specPhaseOrders[0])
-						TOD.append(specPhaseOrders[1])
-						FOD.append(specPhaseOrders[2])
+					shotID.append((burst+shotName))
+					Spectrum2D.append(loadedData[0])
+					Spectrum1D.append(loadedData[1])
+					Charge.append(loadedData[2])
+					totalEnergy.append(loadedData[3])
+					cutoffEnergy95.append(loadedData[4])
 							
 		else:
 			GDD = []
