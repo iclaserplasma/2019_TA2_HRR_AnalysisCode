@@ -226,7 +226,12 @@ class dataRun:
 		if os.path.isfile(gasCellCsvFilePath):
 			gasCell_df = pd.read_csv(gasCellCsvFilePath)
 		else:
-			from .sqlDatabase import connectToSQL
+			try:
+				from .sqlDatabase import connectToSQL
+			except:
+				from sqlDatabase import connectToSQL
+
+			
 			db = connectToSQL(True)
 			keys = ['run','shot_or_burst','GasCellPressure','GasCellLength']
 
