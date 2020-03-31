@@ -1326,7 +1326,7 @@ class dataRun:
 				shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
 				for shot in shots:
 					shotPath = os.path.join(burstDir,shot)
-					spec2d, spec1D, chrge, Etot, ECutOff = np.load(shotPath,allow_pickle=True) 
+					loadedData = np.load(shotPath,allow_pickle=True) 
 					for elem in shot.replace('.','_').split('_'):
 							if 'Shot' in elem:
 								shotName = elem
@@ -1338,36 +1338,39 @@ class dataRun:
 					cutoffEnergy95.append(loadedData[4])
 							
 		else:
-			GDD = []
-			TOD = []
-			FOD = []
+			Spectrum2D = []
+			Spectrum1D = []
+			Charge = []
+			totalEnergy = []
+			cutoffEnergy95 = []
 			shotID = []
 			
 			for burst in bursts:
 				burstDir = os.path.join(runDir,burst)
 				shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
 
-				tmpGDD = []
-				tmpTOD = []
-				tmpFOD = []
-				
+				tmpSpec2D = []
+				tmpSpec1D = []
+				tmpCharge = []
+				tmpTotalEnergy = []
+				tmpCutOffEnergy = []
+
 				for shot in shots:
 					shotPath = os.path.join(burstDir,shot)
-					timeProfile, specPhaseOrders = np.load(shotPath,allow_pickle=True) 
+					loadedData = np.load(shotPath,allow_pickle=True) 
 				
-					# Check for duds
-					t,I = timeProfile
-					indxs = np.argwhere(np.abs(t)>400) # places further than 400 fs from the middle
-					testSum = np.sum(I[indxs])
-					if testSum < 1 or removeDuds is False:
-						tmpGDD.append(specPhaseOrders[0])
-						tmpTOD.append(specPhaseOrders[1])
-						tmpFOD.append(specPhaseOrders[2])
+					tmpSpec2D.append(loadedData[0])
+					tmpSpec1D.append(loadedData[1])
+					tmpCharge.append(loadedData[2])
+					tmpTotalEnergy.append(loadedData[3])
+					tmpCutOffEnergy.append(loadedData[4])
 						
 				shotID.append(burst)        
-				GDD.append((np.mean(tmpGDD),np.std(tmpGDD)))
-				TOD.append((np.mean(tmpTOD),np.std(tmpTOD)))
-				FOD.append((np.mean(tmpFOD),np.std(tmpFOD)))
+				Spectrum2D.append((np.mean(tmpSpec2D),np.std(tmpSpec2D)))
+				Spectrum1D.append((np.mean(tmpSpec1D),np.std(tmpSpec1D)))
+				Charge.append((np.mean(tmpCharge),np.std(tmpCharge)))
+				totalEnergy.append((np.mean(tmpTotalEnergy),np.std(tmpTotalEnergy)))
+				cutoffEnergy95.append((np.mean(tmpCutOffEnergy),np.std(tmpCutOffEnergy)))
 
 		if 'Shot' in shotID[0]:
 			# Shots
@@ -1388,9 +1391,12 @@ class dataRun:
 				orderVal.append((burstNums[i]-1)*maxShotsInBurst+shotNums[i])
 			indxOrder = np.argsort(orderVal)
 			shotID_sorted = np.asarray(shotID)[indxOrder]
-			GDD_sorted = np.asarray(GDD)[indxOrder] 
-			TOD_sorted = np.asarray(TOD)[indxOrder] 
-			FOD_sorted = np.asarray(FOD)[indxOrder] 
+			Spectrum2D_sorted = np.asarray(Spectrum2D)[indxOrder] 
+			Spectrum1D_sorted = np.asarray(Spectrum1D)[indxOrder] 
+			Charge_sorted = np.asarray(Charge)[indxOrder]
+			totalEnergy_sorted = np.asarray(totalEnergy)[indxOrder] 
+			cutoffEnergy95_sorted = np.asarray(cutoffEnergy95)[indxOrder] 
+
 		else:
 			# bursts
 			burstNums = []
@@ -1398,11 +1404,13 @@ class dataRun:
 				burstNums.append(int(burst[5:]))
 			indxOrder = np.argsort(burstNums)
 			shotID_sorted = np.asarray(shotID)[indxOrder]
-			GDD_sorted = np.asarray(GDD)[indxOrder] 
-			TOD_sorted = np.asarray(TOD)[indxOrder] 
-			FOD_sorted = np.asarray(FOD)[indxOrder] 
+			Spectrum2D_sorted = np.asarray(Spectrum2D)[indxOrder] 
+			Spectrum1D_sorted = np.asarray(Spectrum1D)[indxOrder] 
+			Charge_sorted = np.asarray(Charge)[indxOrder]
+			totalEnergy_sorted = np.asarray(totalEnergy)[indxOrder] 
+			cutoffEnergy95_sorted = np.asarray(cutoffEnergy95)[indxOrder] 
 				
-		return shotID_sorted , GDD_sorted, TOD_sorted,FOD_sorted
+		return shotID_sorted , Spectrum2D_sorted, Spectrum1D_sorted,Charge_sorted,totalEnergy_sorted,cutoffEnergy95_sorted
 		
 
 
