@@ -1301,6 +1301,8 @@ class dataRun:
 
 		Each analysed image has data stored in the form 
 		WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95,
+
+		NOTE: getShots = False, does not work...need to use getShots=True
 		'''
 		
 		baseAnalysisFolder = self.baseAnalysisFolder
@@ -1331,11 +1333,11 @@ class dataRun:
 							if 'Shot' in elem:
 								shotName = elem
 					shotID.append((burst+shotName))
-					Spectrum2D.append(loadedData[0])
-					Spectrum1D.append(loadedData[1])
-					Charge.append(loadedData[2])
-					totalEnergy.append(loadedData[3])
-					cutoffEnergy95.append(loadedData[4])
+					Spectrum2D.append(loadedData[1])
+					Spectrum1D.append(loadedData[2])
+					Charge.append(loadedData[3])
+					totalEnergy.append(loadedData[4])
+					cutoffEnergy95.append(loadedData[5])
 							
 		else:
 			Spectrum2D = []
@@ -1359,11 +1361,11 @@ class dataRun:
 					shotPath = os.path.join(burstDir,shot)
 					loadedData = np.load(shotPath,allow_pickle=True) 
 				
-					tmpSpec2D.append(loadedData[0])
-					tmpSpec1D.append(loadedData[1])
-					tmpCharge.append(loadedData[2])
-					tmpTotalEnergy.append(loadedData[3])
-					tmpCutOffEnergy.append(loadedData[4])
+					tmpSpec2D.append(loadedData[1])
+					tmpSpec1D.append(loadedData[2])
+					tmpCharge.append(loadedData[3])
+					tmpTotalEnergy.append(loadedData[4])
+					tmpCutOffEnergy.append(loadedData[5])
 						
 				shotID.append(burst)        
 				Spectrum2D.append((np.mean(tmpSpec2D),np.std(tmpSpec2D)))
@@ -1409,8 +1411,10 @@ class dataRun:
 			Charge_sorted = np.asarray(Charge)[indxOrder]
 			totalEnergy_sorted = np.asarray(totalEnergy)[indxOrder] 
 			cutoffEnergy95_sorted = np.asarray(cutoffEnergy95)[indxOrder] 
-				
-		return shotID_sorted , Spectrum2D_sorted, Spectrum1D_sorted,Charge_sorted,totalEnergy_sorted,cutoffEnergy95_sorted
+		
+		EnergyAxis = loadedData[0]
+
+		return shotID_sorted , EnergyAxis, Spectrum2D_sorted, Spectrum1D_sorted,Charge_sorted,totalEnergy_sorted,cutoffEnergy95_sorted
 		
 
 

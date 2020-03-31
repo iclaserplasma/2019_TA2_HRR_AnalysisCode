@@ -147,7 +147,8 @@ def analyseImage(rawImage, calibrationTuple):
     BackgroundStd_SigmaLevel = np.sum(BackgroundNoise, axis=0) * SignificanceLevel
     cutoffEnergy95 = determine95percentCharge(Energy, Spectrum, BackgroundStd_SigmaLevel)
     totalEnergy = determineTotalEnergy(Energy, Spectrum, BackgroundStd_SigmaLevel)
-    return WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95
+    EnergyAxis = Energy
+    return EnergyAxis, WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95
 
 
 def imageTransformation(image, calibrationTuple):
