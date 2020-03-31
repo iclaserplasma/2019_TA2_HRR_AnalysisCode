@@ -143,7 +143,7 @@ def analyseImage(rawImage, calibrationTuple):
     ChargeInCounts = np.trapz(Spectrum, Energy)  # correct integration of the entire image
     Charge = ChargeInCounts * fCperCounts  # Charge in fC
     Spectrum = Spectrum * fCperCounts  # changing the units from counts/MeV -> fC/MeV
-    SignificanceLevel = 1
+    SignificanceLevel = 5  # What Matt used during the runs
     BackgroundStd_SigmaLevel = np.sum(BackgroundNoise, axis=0) * SignificanceLevel
     cutoffEnergy95 = determine95percentCharge(Energy, Spectrum, BackgroundStd_SigmaLevel)
     totalEnergy = determineTotalEnergy(Energy, Spectrum, BackgroundStd_SigmaLevel)

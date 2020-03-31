@@ -302,7 +302,7 @@ class dataRun:
 				print('Analysed Probe_Interferometry '+ burstStr)
 
 	# ELECTRON ANALYSIS 
-	def performESpecAnalysis(self,useCalibration=True,overwriteData=False):
+	def performESpecAnalysis(self,useCalibration=True):
 		# Load the espec images for the run and analyse
 		# if it exists get it, if not, run initESpecAnalysis and update log
 		try:
