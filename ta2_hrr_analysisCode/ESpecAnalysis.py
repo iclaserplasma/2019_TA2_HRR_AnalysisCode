@@ -363,27 +363,16 @@ def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedC
 
 def getEnergyTransformation(FileLocation, L):
     ImageWarpingFile = 'PositionVsEnergy.mat'
-    ImageWarpingVariable = ['Screen', 'AverageEnergy', 'ErrorEnergyPos', 'ErrorEnergyNeg', 'Div', 
-        'PropagationLength', 'ErrorPropagationLength']
+    ImageWarpingVariable = ['Screen', 'EnergyOnAverage']
     ScreenEnergyOnAverage = loadMatFile(FileLocation, ImageWarpingFile, ImageWarpingVariable)
-    Screen, EnergyOnAverageB, ErrorEnergyPosB, ErrorEnergyNegB, Div, PropagationLength, ErrorPropagationLength = ScreenEnergyOnAverage
+    Screen, EnergyOnAverage = ScreenEnergyOnAverage
     Screen = Screen * 1e3  # in mm
-    PropagationLength = np.interp(L, Screen, PropagationLength)
-    ErrorPropagationLength = np.interp(L, Screen, ErrorPropagationLength)
-    EnergyOnAverag, dxoverdEAverage = calculateEdxoverdE(L, Screen, EnergyOnAverageB)
-    ErrorEnergyPos, dxoverdEPos = calculateEdxoverdE(L, Screen, ErrorEnergyPosB)
-    ErrorEnergyNeg, dxoverdEPos = calculateEdxoverdE(L, Screen, ErrorEnergyNegB)
+    poly3 = np.poly1d(np.polyfit(Screen[0, :], EnergyOnAverage[0, :], 3))
+    E = poly3(L)
+    dpoly3 = np.polyder(poly3)
+    dEoverdx = dpoly3(L)
+    dxoverdE = 1 / dEoverdx
     return E, dxoverdE
-
-def calculateEdxoverdE(L, Screen, EnergyOnAverageB):
-    dx = np.diff(L)
-    for i in range(0, EnergyOnAverageB.shape(0)):
-        EnergyOnAverage[i, :] = np.interp(L, Screen, EnergyOnAverageB[i, :])
-        dE = np.diff(EnergyOnAverage[i, :])
-        dxoverdE = dx/dE
-        dxoverdE = [dxoverdE dxoverdE[-1]]
-        dxoverdEAverage[i, :] = dxoverdE
-    return EnergyOnAverage, dxoverdEAverage
 
 
 def loadMatFile(SettingPath, FileName, VariableName):
