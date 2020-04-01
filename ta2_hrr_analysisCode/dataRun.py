@@ -247,8 +247,16 @@ class dataRun:
 
 		## showing all the tables one by one
 		runSel = gasCell_df['run']==runDate + '/' + runName
-		gasCellPressure = gasCell_df[runSel]['GasCellPressure'].values
-		gasCellLength = gasCell_df[runSel]['GasCellLength'].values
+		shotOrBurst = gasCell_df[runSel]['shot_or_burst'].values
+		pressure = gasCell_df[runSel]['GasCellPressure'].values
+		length = gasCell_df[runSel]['GasCellLength'].values
+
+		gasCellPressure = {}
+		gasCellLength = {}
+		for i in range(np.max(shotOrBurst)):
+			SoB = shotOrBurst[i]
+			gasCellPressure[SoB] = pressure[i]
+			gasCellLength[SoB] = length[i]
 		
 		
 		analysisPath,doesItExist = self.getDiagAnalysisPath('General')
