@@ -1198,9 +1198,9 @@ class dataRun:
 						bounds_error=False, fill_value=0,assume_sorted=True)
 					I_t_burst.append(f_t(tAxis))
 			if getShots:
-				I_t_list.append(np.mean(I_t_burst,axis=0))
-			else:
 				I_t_list.append(I_t_burst)
+			else:
+				I_t_list.append(np.mean(I_t_burst,axis=0))
 		return tAxis, I_t_list
 			
 	def loadGasSetPressure(self):
