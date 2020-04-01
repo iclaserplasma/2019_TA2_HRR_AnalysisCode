@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import numpy as np 
 import pandas as pd
 from scipy.signal import medfilt
+from scipy.interpolate import interp1d
+from scipy.integrate import trapz
 import logging
 import csv 
 import glob
@@ -1162,6 +1164,44 @@ class dataRun:
 				
 		return shotID_sorted , pulseDuration_sorted
 		
+	def loadPulseShape(self, getShots=False,removeDuds=False,tAxis=None):
+		# Returns the Pulse shape as measured by the SPIDER
+		
+
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+
+		diag = 'SPIDER'
+			
+		runDir = os.path.join(baseAnalysisFolder , diag,  runDate , runName)
+		bursts = [f for f in os.listdir(runDir) if not f.startswith('.')]
+		
+		I_t_list = []
+
+		# Get individual shots
+		
+		for burst in bursts:
+			I_t_burst = []
+			burstDir = os.path.join(runDir,burst)
+			shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
+			for shot in shots:
+				shotPath = os.path.join(burstDir,shot)
+				timeProfile, specPhaseOrders = np.load(shotPath,allow_pickle=True) 
+				# Check for duds
+				t,I = timeProfile
+				if (np.min(I)/np.max(I))<0.1:
+					if tAxis is None:
+						tAxis = t
+					I = I/trapz(I,x=t)
+					f_t = interp1d(t,I,kind='linear', 
+						bounds_error=False, fill_value=0,assume_sorted=True)
+					I_t_burst.append(f_t(tAxis))
+			if getShots:
+				I_t_list.append(np.mean(I_t_burst,axis=0))
+			else:
+				I_t_list.append(I_t_burst)
+		return tAxis, I_t_list
 			
 	def loadGasSetPressure(self):
 		# Retrieve the gas set pressure
