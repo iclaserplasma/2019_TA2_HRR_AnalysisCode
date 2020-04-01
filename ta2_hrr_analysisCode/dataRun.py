@@ -221,8 +221,8 @@ class dataRun:
 		return(analysisPath)
 
 	def collectSQLData(self):
-		analysisPath,isItReal = self.getDiagAnalysisPath('General')
-		gasCellCsvFilePath = os.path.join(analysisPath,'GasCell.csv')
+		baseAnalysisFolder = self.baseAnalysisFolder
+		gasCellCsvFilePath = os.path.join(baseAnalysisFolder,'GasCell.csv')
 		runName = self.runName
 		runDate = self.runDate
 		if os.path.isfile(gasCellCsvFilePath):
@@ -248,11 +248,20 @@ class dataRun:
 		
 
 		## showing all the tables one by one
-		runSel = gasCell_df['run']==runName
-		gasCellPressure = gasCell_df[runSel]['GasCellPressure'].values
-		gasCellLength = gasCell_df[runSel]['GasCellLength'].values
+		runSel = gasCell_df['run']==runDate + '/' + runName
+		shotOrBurst = gasCell_df[runSel]['shot_or_burst'].values
+		pressure = gasCell_df[runSel]['GasCellPressure'].values
+		length = gasCell_df[runSel]['GasCellLength'].values
 
+		gasCellPressure = {}
+		gasCellLength = {}
+		for i in range(np.max(shotOrBurst)):
+			SoB = shotOrBurst[i]
+			gasCellPressure[SoB] = pressure[i]
+			gasCellLength[SoB] = length[i]
 		
+		
+		analysisPath,doesItExist = self.getDiagAnalysisPath('General')
 		self.saveData(os.path.join(analysisPath,'GasCellPressure'),gasCellPressure)
 		self.saveData(os.path.join(analysisPath,'gasCellLength'),gasCellLength)
 
@@ -754,59 +763,59 @@ class dataRun:
 	# -----								LOADING ANALYSED DATA FUNCTION CALLS										-----
 	# -------------------------------------------------------------------------------------------------------------------
 
-	def loadESpecData(self):
-		# General function to pull in the electron spectrum data
-		# Each shot has 5 data points saved:
-		# WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95
-		baseAnalysisFolder = self.baseAnalysisFolder
-		runDate = self.runDate
-		runName = self.runName
-		diag='HighESpec'	
+	#def loadESpecData(self):
+	#	# General function to pull in the electron spectrum data
+	#	# Each shot has 5 data points saved:
+	#	# WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95
+	#	baseAnalysisFolder = self.baseAnalysisFolder
+	#	runDate = self.runDate
+	#	runName = self.runName
+	#	diag='HighESpec'	
 
-		def returnAverageESpecPerBurst(data):
-			ave = []
-			std = []
-			
-			for i in range(np.shape(data)[1]):
-				try:
-					a = np.average( np.array(data[:,i]))
-					s = np.std(     np.array(data[:,i]))
-				except AttributeError:            
-					a = np.average( np.array(data[:,i], dtype = float))
-					s = np.std(     np.array(data[:,i], dtype = float))
-				ave.append( a )
-				std.append( s )
-			return ave, std
+	#	def returnAverageESpecPerBurst(data):
+	#		ave = []
+	#		std = []
+	#		
+	#		for i in range(np.shape(data)[1]):
+	#			try:
+	#				a = np.average( np.array(data[:,i]))
+	#				s = np.std(     np.array(data[:,i]))
+	#			except AttributeError:            
+	#				a = np.average( np.array(data[:,i], dtype = float))
+	#				s = np.std(     np.array(data[:,i], dtype = float))
+	#			ave.append( a )
+	#			std.append( s )
+	#		return ave, std
+	#
+	#	eSpecCalib = self.loadCalibrationData(diag)
+	#	_, _, _ , E, dxoverdE, _, L, CutOff, _ = eSpecCalib
+	#	Energy = E[CutOff:]
+	#	# the following parameters will be cut only if they are intended to be used.
+	#	#    Length = L[:, CutOff:]
+	#	dxoverdE = dxoverdE[CutOff:]  # MIGHT BE WRONG		
+	#	calData = (Energy, dxoverdE, L)
 
-		eSpecCalib = self.loadCalibrationData(diag)
-		_, _, _ , E, dxoverdE, _, L, CutOff, _ = eSpecCalib
-		Energy = E[CutOff:]
-		# the following parameters will be cut only if they are intended to be used.
-		#    Length = L[:, CutOff:]
-		dxoverdE = dxoverdE[CutOff:]  # MIGHT BE WRONG		
-		calData = (Energy, dxoverdE, L)
+	#	print ("Loading the data from {}".format(diag))
+	#	analysedDataDir = os.path.join(baseAnalysisFolder,diag,runDate,runName)
+	#	bursts = [f for f in os.listdir(analysedDataDir) if not f.startswith('.')]
+	#	print (analysedDataDir, "\nBurst, Number of shots in burst")
 
-		print ("Loading the data from {}".format(diag))
-		analysedDataDir = os.path.join(baseAnalysisFolder,diag,runDate,runName)
-		bursts = [f for f in os.listdir(analysedDataDir) if not f.startswith('.')]
-		print (analysedDataDir, "\nBurst, Number of shots in burst")
+	#	runOutputEspec = {}
+	#	for burst in bursts:
+	#		analysedFiles = os.listdir(os.path.join(analysedDataDir,burst))
+	#		if 'ESpecAnalysis.npy' in analysedFiles:
+	#			filePath = os.path.join(analysedDataDir, burst, 'ESpecAnalysis.npy')
+	#			d = np.load( filePath, allow_pickle = True)
+	#			print (burst, len(d))
 
-		runOutputEspec = {}
-		for burst in bursts:
-			analysedFiles = os.listdir(os.path.join(analysedDataDir,burst))
-			if 'ESpecAnalysis.npy' in analysedFiles:
-				filePath = os.path.join(analysedDataDir, burst, 'ESpecAnalysis.npy')
-				d = np.load( filePath, allow_pickle = True)
-				print (burst, len(d))
-
-				runOutputEspec[burst] = returnAverageESpecPerBurst(d)
-		BurstIDS = list(runOutputEspec)
-		eDataBurst = []
-		for burst in BurstIDS:
-			eDataBurst.append(runOutputEspec[burst])
+	#			runOutputEspec[burst] = returnAverageESpecPerBurst(d)
+	#	BurstIDS = list(runOutputEspec)
+	#	eDataBurst = []
+	#	for burst in BurstIDS:
+	#		eDataBurst.append(runOutputEspec[burst])
 
 		# eDataBurst contains the average and the std of the burst data
-		return BurstIDS, eDataBurst, calData
+	#	return BurstIDS, eDataBurst, calData
 
 
 	def loadAnalysedXRayCountsData(self,getShots=False):
