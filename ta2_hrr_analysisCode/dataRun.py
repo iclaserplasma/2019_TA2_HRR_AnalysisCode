@@ -251,7 +251,7 @@ class dataRun:
 		gasCellLength = gasCell_df[runSel]['GasCellLength'].values
 		
 		
-		analysisPath = self.getDiagAnalysisPath('General')
+		analysisPath,doesItExist = self.getDiagAnalysisPath('General')
 		self.saveData(os.path.join(analysisPath,'GasCellPressure'),gasCellPressure)
 		self.saveData(os.path.join(analysisPath,'gasCellLength'),gasCellLength)
 
