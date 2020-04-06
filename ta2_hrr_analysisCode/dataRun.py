@@ -961,7 +961,7 @@ class dataRun:
 		return shotID_sorted,laserEnergy_sorted    
 
 
-	def loadAnalysedSpecPhase(self, getShots=False,removeDuds=False):
+	def loadAnalysedSpecPhase(self, getShots=False,removeDuds=True):
 		# Retrieves the spectral phase from the spider
 
 		baseAnalysisFolder = self.baseAnalysisFolder
