@@ -1367,7 +1367,9 @@ class dataRun:
 		if getShots:
 			# Get individual shots
 			Spectrum2D = []
+			Eaxis = []
 			Spectrum1D = []
+			Divergence = []
 			Charge = []
 			totalEnergy = []
 			cutoffEnergy95 = []
@@ -1383,16 +1385,21 @@ class dataRun:
 								shotName = elem
 					# CIDU keep getting the following
 					# 	UnboundLocalError: local variable 'shotName' referenced before assignment
+					# WarpedImageWithoutBckgnd, E, Spectrum, Divergence, Charge, totalEnergy, cutOffEnergy95
 					shotID.append((burst+shotName))
-					Spectrum2D.append(loadedData[1])
-					Spectrum1D.append(loadedData[2])
-					Charge.append(loadedData[3])
-					totalEnergy.append(loadedData[4])
-					cutoffEnergy95.append(loadedData[5])
+					Spectrum2D.append(loadedData[0])
+					Eaxis.append(loadedData[1][0]) # Pull out the main energy axis. Ignore errors for the moment
+					Spectrum1D.append(loadedData[2][0]) # Pull out the main spectrum. Ignore errors for the moment
+					Divergence.append(loadedData[3][0]) # Divergence only, no error
+					Charge.append(loadedData[4][0]) # charge no error
+					totalEnergy.append(loadedData[5][0]) # similar
+					cutoffEnergy95.append(loadedData[6][0]) # similar
 							
 		else:
 			Spectrum2D = []
+			Eaxis = []
 			Spectrum1D = []
+			Divergence = []
 			Charge = []
 			totalEnergy = []
 			cutoffEnergy95 = []
@@ -1403,7 +1410,9 @@ class dataRun:
 				shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
 
 				tmpSpec2D = []
+				tmpEaxis = []
 				tmpSpec1D = []
+				tmpDivergence =[]
 				tmpCharge = []
 				tmpTotalEnergy = []
 				tmpCutOffEnergy = []
@@ -1412,15 +1421,19 @@ class dataRun:
 					shotPath = os.path.join(burstDir,shot)
 					loadedData = np.load(shotPath,allow_pickle=True) 
 				
-					tmpSpec2D.append(loadedData[1])
-					tmpSpec1D.append(loadedData[2])
-					tmpCharge.append(loadedData[3])
-					tmpTotalEnergy.append(loadedData[4])
-					tmpCutOffEnergy.append(loadedData[5])
+					tmpSpec2D.append(loadedData[0])
+					tmpEaxis.append(loadedData[1][0]) # Pull out the main energy axis. Ignore errors for the moment
+					tmpSpec1D.append(loadedData[2][0]) # Pull out the main spectrum. Ignore errors for the moment
+					tmpDivergence.append(loadedData[3][0]) # Divergence only, no error
+					tmpCharge.append(loadedData[4][0]) # charge no error
+					tmpTotalEnergy.append(loadedData[5][0]) # similar
+					tmpCutOffEnergy.append(loadedData[6][0]) # similar
 						
 				shotID.append(burst)        
 				Spectrum2D.append((np.mean(tmpSpec2D),np.std(tmpSpec2D)))
+				Eaxis.append((np.mean(tmpEaxis),np.std(tmpEaxis)))
 				Spectrum1D.append((np.mean(tmpSpec1D),np.std(tmpSpec1D)))
+				Divergence.append((np.mean(tmpDivergence),np.std(tmpDivergence)))
 				Charge.append((np.mean(tmpCharge),np.std(tmpCharge)))
 				totalEnergy.append((np.mean(tmpTotalEnergy),np.std(tmpTotalEnergy)))
 				cutoffEnergy95.append((np.mean(tmpCutOffEnergy),np.std(tmpCutOffEnergy)))
@@ -1445,7 +1458,9 @@ class dataRun:
 			indxOrder = np.argsort(orderVal)
 			shotID_sorted = np.asarray(shotID)[indxOrder]
 			Spectrum2D_sorted = np.asarray(Spectrum2D)[indxOrder] 
+			Eaxis_sorted = np.asarray(Eaxis)[indxOrder] 
 			Spectrum1D_sorted = np.asarray(Spectrum1D)[indxOrder] 
+			Divergence_sorted = np.asarray(Divergence)[indxOrder] 
 			Charge_sorted = np.asarray(Charge)[indxOrder]
 			totalEnergy_sorted = np.asarray(totalEnergy)[indxOrder] 
 			cutoffEnergy95_sorted = np.asarray(cutoffEnergy95)[indxOrder] 
@@ -1458,14 +1473,15 @@ class dataRun:
 			indxOrder = np.argsort(burstNums)
 			shotID_sorted = np.asarray(shotID)[indxOrder]
 			Spectrum2D_sorted = np.asarray(Spectrum2D)[indxOrder] 
+			Eaxis_sorted = np.asarray(Eaxis)[indxOrder] 
 			Spectrum1D_sorted = np.asarray(Spectrum1D)[indxOrder] 
+			Divergence_sorted = np.asarray(Divergence)[indxOrder] 
 			Charge_sorted = np.asarray(Charge)[indxOrder]
 			totalEnergy_sorted = np.asarray(totalEnergy)[indxOrder] 
 			cutoffEnergy95_sorted = np.asarray(cutoffEnergy95)[indxOrder] 
-		
-		EnergyAxis = loadedData[0]
 
-		return shotID_sorted , EnergyAxis, Spectrum2D_sorted, Spectrum1D_sorted,Charge_sorted,totalEnergy_sorted,cutoffEnergy95_sorted
+		# WarpedImageWithoutBckgnd, E, Spectrum, Divergence, Charge, totalEnergy, cutOffEnergy95
+		return shotID_sorted , Eaxis_sorted, Spectrum2D_sorted, Spectrum1D_sorted,Divergence_sorted,Charge_sorted,totalEnergy_sorted,cutoffEnergy95_sorted
 		
 
 
