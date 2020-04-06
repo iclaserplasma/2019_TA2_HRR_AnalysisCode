@@ -118,18 +118,22 @@ def analyseImage(rawImage, calibrationTuple):
     :param calibrationTupel: (J, W, pts, E, dxoverdE, BackgroundImage, L, CutOff, BackgroundNoise) as a tupel
     Explicit information about the calibrationTupel see function 'createNewCalibrationFiles'
     :return:
-
+    WarpedImageWithoutBckgnd - The warped image ( should be in fC/pixel)
+    E
+    Energy scale of the spectrum (differs from shot to shot). Is a list containing the main energy scale, and the top and bottom limts:
+    [E average, [E top, E bottom]]
+    Spectrum - spectra in the similar style as energy [Spectrum average, [Spectrum top, Spectrum bottom]]
+    Divergence - divergence of the beam in mrad [divergence, standard error of the divergence]
+    Charge - charge of the electron beam in fC [charge, standard error of the charge]
+    totalEnergy - integrated energy of the electron beam in J [average energy, [upper limit, lower limit]]
+    cutOffEnergy95 - cut off energy at 95% charge of the electron beam in MeV, [upper limit, lower limit]]
     """
-    J, W, pts, E, dxoverdE, BackgroundImage, L, CutOff, BackgroundNoise = calibrationTuple
+    _, _, _, _, L, _, BackgroundNoise, _ = calibrationTuple
     # preparation of the calibration parameter (later move into the calibration prep above)
     # The cut off is an index, which indicates, where the calibration between image plate and camera image did not work.
     # This was due to a camera artifact (an imaging problem with the perplex glass)
-    Energy = E[CutOff:]
     # the following parameters will be cut only if they are intended to be used.
     #    Length = L[:, CutOff:]
-    dxoverdE = dxoverdE[CutOff:]  # MIGHT BE WRONG
-    #    BackgroundImage = BckgndImage[:, CutOff:]
-    BackgroundNoise = BackgroundNoise[:, CutOff:]
 
     # here hard coded: the analysis of the image plates yield to a count to fC calibration of:
     fCperCounts = 2.7e-3
@@ -138,21 +142,96 @@ def analyseImage(rawImage, calibrationTuple):
     # now to the analysis:
     image = rawImage.astype(float)
     WarpedImageWithoutBckgnd = imageTransformation(image, calibrationTuple)
+    WarpedImageWithoutBckgnd = WarpedImageWithoutBckgnd * fCperCounts
+    ChargeAv = np.sum(WarpedImageWithoutBckgnd)
+    ChargeStd = np.sum(WarpedImageWithoutBckgnd)/fCperCounts*fCperCountsSigma
+    Charge = [ChargeAv, ChargeStd]
     # correctly integrating the spectrum and change the units from counts/mm -> counts/MeV
-    Spectrum = electronSpectrum(WarpedImageWithoutBckgnd, dxoverdE, L)
-    ChargeInCounts = np.trapz(Spectrum, Energy)  # correct integration of the entire image
-    Charge = ChargeInCounts * fCperCounts  # Charge in fC
-    Spectrum = Spectrum * fCperCounts  # changing the units from counts/MeV -> fC/MeV
-    SignificanceLevel = 0  # 0 because the images are already background Subtracted
-    BackgroundStd_SigmaLevel = np.sum(BackgroundNoise, axis=0) * SignificanceLevel
-    cutoffEnergy95 = determine95percentCharge(Energy, Spectrum, BackgroundStd_SigmaLevel)
-    totalEnergy = determineTotalEnergy(Energy, Spectrum, BackgroundStd_SigmaLevel)
-    EnergyAxis = Energy
-    return EnergyAxis, WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95
+    Spectrum, Divergence, E, dxoverdE = getDivergenceAndEnergySpectrum(WarpedImageWithoutBckgnd, calibrationTuple)
+    cutOffEnergy95 = dataDistributer(determine95percentCharge, E, Spectrum, dxoverdE, BackgroundNoise, L)
+    totalEnergy = dataDistributer(determineTotalEnergy, E, Spectrum, dxoverdE, BackgroundNoise, L)
+    return WarpedImageWithoutBckgnd, E, Spectrum, Divergence, Charge, totalEnergy, cutOffEnergy95
+
+
+def findFirstLastTruth(AboveFWHM):
+    j=0
+    while AboveFWHM[j] == 0:
+        j += 1
+    first = j
+    j=1
+    while AboveFWHM[-j] == 0:
+        j += 1
+    last = j
+    return first, last
+
+def FWHMCalculator(CroppedImage, W):
+    FWHM = np.zeros(CroppedImage.shape[1])
+    for i in range(0, CroppedImage.shape[1]):
+        LineOut = CroppedImage[:, i]
+        if LineOut.max() == 0:
+            FWHM[i] = 0
+            continue
+        LineOut = LineOut/LineOut.max()
+        AboveFWHM = LineOut >= .5
+        if any(AboveFWHM):
+            first, last = findFirstLastTruth(AboveFWHM)
+            FWHM[i] = W[-last] - W[first]
+        else:
+            FWHM[i] = 0
+    return FWHM
+
+
+def getDivergenceAndEnergySpectrum(image, calibrationTuple):
+    _, W, _, _, L, CutOff, BackgroundNoise, EnergyDivergenceTuple = calibrationTuple
+    EAv, dxoverdEAv, EPos, dxoverdEPos, ENeg, dxoverdENeg, Div, PropL, ErrPropL, Cell2Magnet = EnergyDivergenceTuple
+    Cell2Magnet = Cell2Magnet[0][0]
+    #  W in mm
+    CroppedImage = image
+    CroppedImage[CroppedImage < CroppedImage.max()*.05] = 0
+    TmpSumCounts = np.sum(CroppedImage, 0)
+    TmpSpectrum = np.multiply(TmpSumCounts, dxoverdEAv[0,:]) / np.mean(np.diff(L))  
+    WMatrix = np.reshape( np.repeat(W, CroppedImage.shape[1]), CroppedImage.shape )
+    normFac = np.sum(CroppedImage, axis=0)
+    normFac[normFac <= normFac.max()*0.01] = normFac.max()*0.01
+    CMS = np.sum( WMatrix * CroppedImage, axis=0) / normFac
+    # the total length of flight:
+    TotalLengthOfFlight = np.sqrt( PropL**2  + (CMS*1e-3)**2 )
+    #  the FWHM for each length (0 if it does not fulfill the criteria)
+    FWHM = FWHMCalculator(CroppedImage, W)
+    # and finally the divergence for each length and then averaged with a weightening on the signal strength:
+    RawDivergence = FWHM/TotalLengthOfFlight
+    AveragedDivergence = np.sum( RawDivergence*TmpSpectrum/TmpSpectrum.sum() )
+    # error propagation:
+    StdDivergence = np.sqrt( np.sum( (AveragedDivergence - RawDivergence)**2 * TmpSpectrum/TmpSpectrum.sum() ) )
+    # this is def a high error and the error on the propagation length can be ignored in respect to this
+    # Now energy time! yay...
+    FWHMAtMagnet = AveragedDivergence * Cell2Magnet * 1e-3
+    relEnergyScaleID = np.argmin( abs( FWHMAtMagnet - Div ) )
+    E = [EAv[relEnergyScaleID, :], [EPos[relEnergyScaleID, :], ENeg[relEnergyScaleID, :]]]
+    dxoverdE = [dxoverdEAv[relEnergyScaleID, :], [dxoverdEPos[relEnergyScaleID, :], dxoverdENeg[relEnergyScaleID, :]]]
+    SpectrumAv = electronSpectrum(image, dxoverdE[0], L)
+    SpectrumPos = electronSpectrum(image, dxoverdE[1][0], L)
+    SpectrumNeg = electronSpectrum(image, dxoverdE[1][1], L)
+    Spectrum = [SpectrumAv, [SpectrumPos, SpectrumNeg]]
+    return Spectrum, [AveragedDivergence, StdDivergence], E, dxoverdE
+
+
+def dataDistributer(Fcn, E, Spectrum, dxoverdE, BackgroundNoise, L):
+    def subroutine(Fcn, E, Spectrum, dxoverdE, BackgroundNoise, L):
+        SignificanceLevel = 1
+        TmpSumCounts = np.sum(BackgroundNoise, axis=0)/np.sqrt(BackgroundNoise.shape[1]-1)
+        BackgroundStd_SigmaLevel = np.multiply(TmpSumCounts, dxoverdE) / np.mean(np.diff(L)) * SignificanceLevel
+        return Fcn(E, Spectrum, BackgroundStd_SigmaLevel)
+    
+    Av = subroutine(Fcn, E[0], Spectrum[0], dxoverdE[0], BackgroundNoise, L)
+    Pos = subroutine(Fcn, E[1][0], Spectrum[1][0], dxoverdE[1][0], BackgroundNoise, L)
+    Neg = subroutine(Fcn, E[1][1], Spectrum[1][1], dxoverdE[1][1], BackgroundNoise, L)
+    return [Av, [Pos, Neg]]
+
 
 
 def imageTransformation(image, calibrationTuple):
-    J, _, pts, _, _, BackgroundImage, _, CutOff, _ = calibrationTuple
+    J, _, pts, BackgroundImage, _, CutOff, _, _ = calibrationTuple # this is updated to the new calibration tuple
     WarpedImage, __ = four_point_transform(image, pts, J)  # warp the image
     WarpedImage = np.fliplr(WarpedImage)  # the axis is flipped (high and low energy)
     WarpedImageWithoutBckgnd = WarpedImage - BackgroundImage  # background subtraction
@@ -337,16 +416,20 @@ def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedC
     if foundDarkfields:
         if BackgroundImage == 0:
             BackgroundImage, BackgroundNoise = backgroundImages(backgroundImagesPath, J, pts)
+            BackgroundNoise = BackgroundNoise[:, CutOff:]
         #  now loading the right magnet map
         FileLocation = os.path.join(basePath, 'Calibrations', 'HighESpec')
-        E, dxoverdE = getEnergyTransformation(FileLocation, L)
-
+        # E, dxoverdE = getEnergyTransformation(FileLocation, L)
+        AverageEnergy, dxoverdEAverage, ErrorEnergyPos, dxoverdEPos, ErrorEnergyNeg, dxoverdENeg, Div, PropagationLength, ErrorPropagationLength, Cell2Magnet = getEnergyTransformation(FileLocation, L)
+        tupleOut = applyCutOffFcn((AverageEnergy, dxoverdEAverage, ErrorEnergyPos, dxoverdEPos, ErrorEnergyNeg, dxoverdENeg, PropagationLength, ErrorPropagationLength), 300)
+        AverageEnergy, dxoverdEAverage, ErrorEnergyPos, dxoverdEPos, ErrorEnergyNeg, dxoverdENeg, PropagationLength, ErrorPropagationLength = tupleOut
+        EnergyDivergenceTuple = (AverageEnergy, dxoverdEAverage, ErrorEnergyPos, dxoverdEPos, ErrorEnergyNeg, dxoverdENeg, Div, PropagationLength, ErrorPropagationLength, Cell2Magnet)
         totalCalibrationFilePath = os.path.join(calPath, 'HighEspec', '%d' % runDate)
         if not os.path.exists(totalCalibrationFilePath):
             os.mkdir(totalCalibrationFilePath)
         simpleRunName = runName[9:]
         calFile = os.path.join(totalCalibrationFilePath, simpleRunName)
-        calibrationTuple = (J, W, pts, E, dxoverdE, BackgroundImage, L, CutOff, BackgroundNoise)
+        calibrationTuple = (J, W, pts, BackgroundImage, L, CutOff, BackgroundNoise, EnergyDivergenceTuple)
         np.save(calFile, calibrationTuple)
         #  the entry for the database is a relative path:
         relPathForDatabase = os.path.join('HighESpec', '%d' % runDate, '%s.npy' % simpleRunName)
@@ -362,18 +445,43 @@ def createNewCalibrationFiles(runName, basePath=r'Z:\\', calPath='Y:\\ProcessedC
             changeFileEntry('', runName, calPath)
 
 
+def applyCutOffFcn(TupleIn, CutOff):
+    TupleOut = []
+    for i in range(0, len(TupleIn)):
+        tmp = TupleIn[i]
+        if len( tmp.shape ) > 1:
+            TupleOut.append(TupleIn[i][:, CutOff:])
+        else:
+            TupleOut.append(TupleIn[i][CutOff:])
+    return tuple(TupleOut)
+
+
 def getEnergyTransformation(FileLocation, L):
     ImageWarpingFile = 'PositionVsEnergy.mat'
-    ImageWarpingVariable = ['Screen', 'EnergyOnAverage']
+    ImageWarpingVariable = ['Screen', 'AverageEnergy', 'ErrorEnergyPos', 'ErrorEnergyNeg', 'Div',
+                           'PropagationLength', 'ErrorPropagationLength', 'Cell2Magnet']
     ScreenEnergyOnAverage = loadMatFile(FileLocation, ImageWarpingFile, ImageWarpingVariable)
-    Screen, EnergyOnAverage = ScreenEnergyOnAverage
-    Screen = Screen * 1e3  # in mm
-    poly3 = np.poly1d(np.polyfit(Screen[0, :], EnergyOnAverage[0, :], 3))
-    E = poly3(L)
-    dpoly3 = np.polyder(poly3)
-    dEoverdx = dpoly3(L)
-    dxoverdE = 1 / dEoverdx
-    return E, dxoverdE
+    Screen, AverageEnergyB, ErrorEnergyPosB, ErrorEnergyNegB, Div, PropagationLengthB, ErrorPropagationLengthB, Cell2Magnet = ScreenEnergyOnAverage
+    Screen = Screen[0,]*1e3
+    PropagationLength = np.interp(L, Screen, PropagationLengthB[0,])
+    ErrorPropagationLength = np.interp(L, Screen, ErrorPropagationLengthB[0,])
+    AverageEnergy, dxoverdEAverage = calculateEdxoverdE(L, Screen, AverageEnergyB)
+    ErrorEnergyPos, dxoverdEPos = calculateEdxoverdE(L, Screen, ErrorEnergyPosB)
+    ErrorEnergyNeg, dxoverdENeg = calculateEdxoverdE(L, Screen, ErrorEnergyNegB)
+    return AverageEnergy, dxoverdEAverage, ErrorEnergyPos, dxoverdEPos, ErrorEnergyNeg, dxoverdENeg, Div, PropagationLength, ErrorPropagationLength, Cell2Magnet
+
+
+def calculateEdxoverdE(L, Screen, AverageEnergyB):
+    dx = np.diff(L)
+    AverageEnergy = np.zeros([AverageEnergyB.shape[0], L.shape[0]])
+    dxoverdEAverage = np.zeros([AverageEnergyB.shape[0], L.shape[0]])
+    for i in range(0, AverageEnergyB.shape[0]):
+        AverageEnergy[i, :] = np.interp(L, Screen, AverageEnergyB[i, :])
+        dE = np.diff(AverageEnergy[i, :])
+        dxoverdE = dx/dE
+        dxoverdE = np.append(dxoverdE, dxoverdE[-1])
+        dxoverdEAverage[i, :] = dxoverdE
+    return AverageEnergy, dxoverdEAverage
 
 
 def loadMatFile(SettingPath, FileName, VariableName):
