@@ -92,6 +92,23 @@ def ESpecSCEC(FileList, calibrationTuple):
         analysedData.append(analysedImage)
     return analysedData
 
+def ESpecSCEC_individual(FilePath, calibrationTuple):
+    """
+    This function is supposed to be called from runData. It takes the a file path and the calibration tuple.
+    :param FilePath:
+    :param calibrationTuple:
+    :return: analysed tuples
+    """
+    from PIL import Image
+    im = Image.open(FilePath)
+    image = np.array(im)
+    if image.dtype == np.uint16:
+        # 12-bit data in a 16-bit image
+        # The format is 0x8XXX
+        # So just mask out the top nybble and we're good to go
+        image &= 0xfff
+    analysedData = analyseImage(image, calibrationTuple)
+    return analysedData
 
 def analyseImage(rawImage, calibrationTuple):
     """
@@ -210,6 +227,7 @@ def dataDistributer(Fcn, E, Spectrum, dxoverdE, BackgroundNoise, L):
     Pos = subroutine(Fcn, E[1][0], Spectrum[1][0], dxoverdE[1][0], BackgroundNoise, L)
     Neg = subroutine(Fcn, E[1][1], Spectrum[1][1], dxoverdE[1][1], BackgroundNoise, L)
     return [Av, [Pos, Neg]]
+
 
 
 def imageTransformation(image, calibrationTuple):

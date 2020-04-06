@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import numpy as np 
 import pandas as pd
 from scipy.signal import medfilt
+from scipy.interpolate import interp1d
+from scipy.integrate import trapz
 import logging
 import csv 
 import glob
@@ -219,14 +221,19 @@ class dataRun:
 		return(analysisPath)
 
 	def collectSQLData(self):
-		analysisPath,isItReal = self.getDiagAnalysisPath('General')
-		gasCellCsvFilePath = os.path.join(analysisPath,'GasCell.csv')
+		baseAnalysisFolder = self.baseAnalysisFolder
+		gasCellCsvFilePath = os.path.join(baseAnalysisFolder,'GasCell.csv')
 		runName = self.runName
 		runDate = self.runDate
 		if os.path.isfile(gasCellCsvFilePath):
 			gasCell_df = pd.read_csv(gasCellCsvFilePath)
 		else:
-			from .sqlDatabase import connectToSQL
+			try:
+				from .sqlDatabase import connectToSQL
+			except:
+				from sqlDatabase import connectToSQL
+
+			
 			db = connectToSQL(True)
 			keys = ['run','shot_or_burst','GasCellPressure','GasCellLength']
 
@@ -241,11 +248,20 @@ class dataRun:
 		
 
 		## showing all the tables one by one
-		runSel = gasCell_df['run']==runName
-		gasCellPressure = gasCell_df[runSel]['GasCellPressure'].values
-		gasCellLength = gasCell_df[runSel]['GasCellLength'].values
+		runSel = gasCell_df['run']==runDate + '/' + runName
+		shotOrBurst = gasCell_df[runSel]['shot_or_burst'].values
+		pressure = gasCell_df[runSel]['GasCellPressure'].values
+		length = gasCell_df[runSel]['GasCellLength'].values
 
+		gasCellPressure = {}
+		gasCellLength = {}
+		for i in range(np.max(shotOrBurst)):
+			SoB = shotOrBurst[i]
+			gasCellPressure[SoB] = pressure[i]
+			gasCellLength[SoB] = length[i]
 		
+		
+		analysisPath,doesItExist = self.getDiagAnalysisPath('General')
 		self.saveData(os.path.join(analysisPath,'GasCellPressure'),gasCellPressure)
 		self.saveData(os.path.join(analysisPath,'gasCellLength'),gasCellLength)
 
@@ -297,7 +313,7 @@ class dataRun:
 				print('Analysed Probe_Interferometry '+ burstStr)
 
 	# ELECTRON ANALYSIS 
-	def performESpecAnalysis(self,useCalibration=True,overwriteData=False):
+	def performESpecAnalysis(self,useCalibration=True):
 		# Load the espec images for the run and analyse
 		# if it exists get it, if not, run initESpecAnalysis and update log
 		try:
@@ -315,18 +331,22 @@ class dataRun:
 
 		for burstStr in filePathDict.keys():		
 			if useCalibration:
-				analysedData = ESpecAnalysis.ESpecSCEC(filePathDict[burstStr],eSpecCalib)
-				# Save the data
-				analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis')
-				self.saveData(analysisSavePath,analysedData)
+				for shotFile in filePathDict[burstStr]:
+					shotID = shotFile.split('\\')[-1].split('.')[0]
+					analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile,eSpecCalib)
+					# Save the data
+					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_'+shotID)
+					self.saveData(analysisSavePath,analysedData)
 
 			else:
-				analysedData = ESpecAnalysis.ESpecSCEC(filePathDict[burstStr])
-				# Save the data
-				analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_NoCalibration')
-				self.saveData(analysisSavePath,analysedData)
+				for shotFile in filePathDict[burstStr]:
+					shotID = shotFile.split('\\')[-1].split('.')[0]
+					analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile)
+					# Save the data
+					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_NoCalibration_'+shotID)
+					self.saveData(analysisSavePath,analysedData)
 			self.logThatShit('Performed HighESpec Analysis for ' + burstStr)
-			print('Analysed ESpec Spectrum, Charge, totalEnergy, cutoffEnergy95 for Burst '+ burstStr)
+			print('Analysed ESpec Spectrum, Charge, totalEnergy, cutoffEnergy95 for '+ burstStr)
 
 	# SPIDER ANALYSIS CALLS 
 	def performSPIDERAnalysis(self):
@@ -374,13 +394,14 @@ class dataRun:
 				if getIndividualShots:
 					for shotFile in filePathDict[burstStr]:
 						# Check if analysis already exists:
-						fileCheck = os.path.exists(os.path.join(analysisPath,burstStr,shotFile[-9:-4]+'.npy'))
+						shotID = shotFile.split('\\')[-1].split('.')[0]
+						fileCheck = os.path.exists(os.path.join(analysisPath,burstStr,shotID+'.npy'))
 						if fileCheck and not overwriteAnalysis:
-							print(burstStr + ' ' + shotFile[-9:-4] +': Already Analysed')
+							print(burstStr + ' ' + shotID +': Already Analysed')
 						else:
 							analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(shotFile,zernikeOffsets)
 							# Save the data
-							analysisSavePath = os.path.join(analysisPath,burstStr,shotFile[-9:-4])
+							analysisSavePath = os.path.join(analysisPath,burstStr,shotID)
 							self.saveData(analysisSavePath,analysedData)
 				else:
 					analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(filePathDict[burstStr],zernikeOffsets)
@@ -392,13 +413,14 @@ class dataRun:
 				if getIndividualShots:
 					for shotFile in filePathDict[burstStr]:
 						# Check if analysis already exists:
-						fileCheck = os.path.exists(os.path.join(analysisPath,burstStr,shotFile[-9:-4]+'.npy'))
+						shotID = shotFile.split('\\')[-1].split('.')[0]
+						fileCheck = os.path.exists(os.path.join(analysisPath,burstStr,shotID+'.npy'))
 						if fileCheck and not overwriteAnalysis:
-							print(burstStr + ' ' + shotFile[-9:-4] +': Already Analysed')
+							print(burstStr + ' ' + shotID +': Already Analysed')
 						else:
 							analysedData = HASOAnalysis.extractCalibratedWavefrontInfo(shotFile)
 							# Save the data
-							analysisSavePath = os.path.join(analysisPath,burstStr,shotFile[-9:-4])
+							analysisSavePath = os.path.join(analysisPath,burstStr,shotID)
 							self.saveData(analysisSavePath,analysedData)
 				else:
 					analysedData = HASOAnalysis.extractWavefrontInfo(filePathDict[burstStr])
@@ -741,59 +763,59 @@ class dataRun:
 	# -----								LOADING ANALYSED DATA FUNCTION CALLS										-----
 	# -------------------------------------------------------------------------------------------------------------------
 
-	def loadESpecData(self):
-		# General function to pull in the electron spectrum data
-		# Each shot has 5 data points saved:
-		# WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95
-		baseAnalysisFolder = self.baseAnalysisFolder
-		runDate = self.runDate
-		runName = self.runName
-		diag='HighESpec'	
+	#def loadESpecData(self):
+	#	# General function to pull in the electron spectrum data
+	#	# Each shot has 5 data points saved:
+	#	# WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95
+	#	baseAnalysisFolder = self.baseAnalysisFolder
+	#	runDate = self.runDate
+	#	runName = self.runName
+	#	diag='HighESpec'	
 
-		def returnAverageESpecPerBurst(data):
-			ave = []
-			std = []
-			
-			for i in range(np.shape(data)[1]):
-				try:
-					a = np.average( np.array(data[:,i]))
-					s = np.std(     np.array(data[:,i]))
-				except AttributeError:            
-					a = np.average( np.array(data[:,i], dtype = float))
-					s = np.std(     np.array(data[:,i], dtype = float))
-				ave.append( a )
-				std.append( s )
-			return ave, std
+	#	def returnAverageESpecPerBurst(data):
+	#		ave = []
+	#		std = []
+	#		
+	#		for i in range(np.shape(data)[1]):
+	#			try:
+	#				a = np.average( np.array(data[:,i]))
+	#				s = np.std(     np.array(data[:,i]))
+	#			except AttributeError:            
+	#				a = np.average( np.array(data[:,i], dtype = float))
+	#				s = np.std(     np.array(data[:,i], dtype = float))
+	#			ave.append( a )
+	#			std.append( s )
+	#		return ave, std
+	#
+	#	eSpecCalib = self.loadCalibrationData(diag)
+	#	_, _, _ , E, dxoverdE, _, L, CutOff, _ = eSpecCalib
+	#	Energy = E[CutOff:]
+	#	# the following parameters will be cut only if they are intended to be used.
+	#	#    Length = L[:, CutOff:]
+	#	dxoverdE = dxoverdE[CutOff:]  # MIGHT BE WRONG		
+	#	calData = (Energy, dxoverdE, L)
 
-		eSpecCalib = self.loadCalibrationData(diag)
-		_, _, _ , E, dxoverdE, _, L, CutOff, _ = eSpecCalib
-		Energy = E[CutOff:]
-		# the following parameters will be cut only if they are intended to be used.
-		#    Length = L[:, CutOff:]
-		dxoverdE = dxoverdE[CutOff:]  # MIGHT BE WRONG		
-		calData = (Energy, dxoverdE, L)
+	#	print ("Loading the data from {}".format(diag))
+	#	analysedDataDir = os.path.join(baseAnalysisFolder,diag,runDate,runName)
+	#	bursts = [f for f in os.listdir(analysedDataDir) if not f.startswith('.')]
+	#	print (analysedDataDir, "\nBurst, Number of shots in burst")
 
-		print ("Loading the data from {}".format(diag))
-		analysedDataDir = os.path.join(baseAnalysisFolder,diag,runDate,runName)
-		bursts = [f for f in os.listdir(analysedDataDir) if not f.startswith('.')]
-		print (analysedDataDir, "\nBurst, Number of shots in burst")
+	#	runOutputEspec = {}
+	#	for burst in bursts:
+	#		analysedFiles = os.listdir(os.path.join(analysedDataDir,burst))
+	#		if 'ESpecAnalysis.npy' in analysedFiles:
+	#			filePath = os.path.join(analysedDataDir, burst, 'ESpecAnalysis.npy')
+	#			d = np.load( filePath, allow_pickle = True)
+	#			print (burst, len(d))
 
-		runOutputEspec = {}
-		for burst in bursts:
-			analysedFiles = os.listdir(os.path.join(analysedDataDir,burst))
-			if 'ESpecAnalysis.npy' in analysedFiles:
-				filePath = os.path.join(analysedDataDir, burst, 'ESpecAnalysis.npy')
-				d = np.load( filePath, allow_pickle = True)
-				print (burst, len(d))
-
-				runOutputEspec[burst] = returnAverageESpecPerBurst(d)
-		BurstIDS = list(runOutputEspec)
-		eDataBurst = []
-		for burst in BurstIDS:
-			eDataBurst.append(runOutputEspec[burst])
+	#			runOutputEspec[burst] = returnAverageESpecPerBurst(d)
+	#	BurstIDS = list(runOutputEspec)
+	#	eDataBurst = []
+	#	for burst in BurstIDS:
+	#		eDataBurst.append(runOutputEspec[burst])
 
 		# eDataBurst contains the average and the std of the burst data
-		return BurstIDS, eDataBurst, calData
+	#	return BurstIDS, eDataBurst, calData
 
 
 	def loadAnalysedXRayCountsData(self,getShots=False):
@@ -1151,6 +1173,44 @@ class dataRun:
 				
 		return shotID_sorted , pulseDuration_sorted
 		
+	def loadPulseShape(self, getShots=False,removeDuds=False,tAxis=None):
+		# Returns the Pulse shape as measured by the SPIDER
+		
+
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+
+		diag = 'SPIDER'
+			
+		runDir = os.path.join(baseAnalysisFolder , diag,  runDate , runName)
+		bursts = [f for f in os.listdir(runDir) if not f.startswith('.')]
+		
+		I_t_list = []
+
+		# Get individual shots
+		
+		for burst in bursts:
+			I_t_burst = []
+			burstDir = os.path.join(runDir,burst)
+			shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
+			for shot in shots:
+				shotPath = os.path.join(burstDir,shot)
+				timeProfile, specPhaseOrders = np.load(shotPath,allow_pickle=True) 
+				# Check for duds
+				t,I = timeProfile
+				if (np.min(I)/np.max(I))<0.1:
+					if tAxis is None:
+						tAxis = t
+					I = I/trapz(I,x=t)
+					f_t = interp1d(t,I,kind='linear', 
+						bounds_error=False, fill_value=0,assume_sorted=True)
+					I_t_burst.append(f_t(tAxis))
+			if getShots:
+				I_t_list.append(I_t_burst)
+			else:
+				I_t_list.append(np.mean(I_t_burst,axis=0))
+		return tAxis, I_t_list
 			
 	def loadGasSetPressure(self):
 		# Retrieve the gas set pressure
@@ -1284,6 +1344,128 @@ class dataRun:
 			return shotID_sorted, z4_sorted , focusShift
 		else:
 			return shotID_sorted, z4_sorted
+
+	def loadAnalysedESpec(self,getShots=False):
+		''' Retrieves the Analysed ESpec data
+
+		Each analysed image has data stored in the form 
+		WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95,
+
+		NOTE: getShots = False, does not work...need to use getShots=True
+		'''
+		
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+
+		diag = 'HighESpec'
+			
+		runDir = os.path.join(baseAnalysisFolder , diag,  runDate , runName)
+		bursts = [f for f in os.listdir(runDir) if not f.startswith('.')]
+			
+
+		if getShots:
+			# Get individual shots
+			Spectrum2D = []
+			Spectrum1D = []
+			Charge = []
+			totalEnergy = []
+			cutoffEnergy95 = []
+			shotID = []
+			for burst in bursts:
+				burstDir = os.path.join(runDir,burst)
+				shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
+				for shot in shots:
+					shotPath = os.path.join(burstDir,shot)
+					loadedData = np.load(shotPath,allow_pickle=True) 
+					for elem in shot.replace('.','_').split('_'):
+							if 'Shot' in elem:
+								shotName = elem
+					shotID.append((burst+shotName))
+					Spectrum2D.append(loadedData[1])
+					Spectrum1D.append(loadedData[2])
+					Charge.append(loadedData[3])
+					totalEnergy.append(loadedData[4])
+					cutoffEnergy95.append(loadedData[5])
+							
+		else:
+			Spectrum2D = []
+			Spectrum1D = []
+			Charge = []
+			totalEnergy = []
+			cutoffEnergy95 = []
+			shotID = []
+			
+			for burst in bursts:
+				burstDir = os.path.join(runDir,burst)
+				shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
+
+				tmpSpec2D = []
+				tmpSpec1D = []
+				tmpCharge = []
+				tmpTotalEnergy = []
+				tmpCutOffEnergy = []
+
+				for shot in shots:
+					shotPath = os.path.join(burstDir,shot)
+					loadedData = np.load(shotPath,allow_pickle=True) 
+				
+					tmpSpec2D.append(loadedData[1])
+					tmpSpec1D.append(loadedData[2])
+					tmpCharge.append(loadedData[3])
+					tmpTotalEnergy.append(loadedData[4])
+					tmpCutOffEnergy.append(loadedData[5])
+						
+				shotID.append(burst)        
+				Spectrum2D.append((np.mean(tmpSpec2D),np.std(tmpSpec2D)))
+				Spectrum1D.append((np.mean(tmpSpec1D),np.std(tmpSpec1D)))
+				Charge.append((np.mean(tmpCharge),np.std(tmpCharge)))
+				totalEnergy.append((np.mean(tmpTotalEnergy),np.std(tmpTotalEnergy)))
+				cutoffEnergy95.append((np.mean(tmpCutOffEnergy),np.std(tmpCutOffEnergy)))
+
+		if 'Shot' in shotID[0]:
+			# Shots
+			burstNums = []
+			shotNums = []
+			for burstShot in shotID:
+				# Split up burst and shot strings
+				tmpSpl = burstShot.split('S')
+				tmpSpl[1] = 'S'+tmpSpl[1]
+				burst = tmpSpl[0]
+				shot = tmpSpl[1]
+
+				burstNums.append(int(burst[5:]))
+				shotNums.append(int(shot[4:]))
+			orderVal = []
+			maxShotsInBurst = np.amax(shotNums)
+			for i in range(len(burstNums)):
+				orderVal.append((burstNums[i]-1)*maxShotsInBurst+shotNums[i])
+			indxOrder = np.argsort(orderVal)
+			shotID_sorted = np.asarray(shotID)[indxOrder]
+			Spectrum2D_sorted = np.asarray(Spectrum2D)[indxOrder] 
+			Spectrum1D_sorted = np.asarray(Spectrum1D)[indxOrder] 
+			Charge_sorted = np.asarray(Charge)[indxOrder]
+			totalEnergy_sorted = np.asarray(totalEnergy)[indxOrder] 
+			cutoffEnergy95_sorted = np.asarray(cutoffEnergy95)[indxOrder] 
+
+		else:
+			# bursts
+			burstNums = []
+			for burst in shotID:
+				burstNums.append(int(burst[5:]))
+			indxOrder = np.argsort(burstNums)
+			shotID_sorted = np.asarray(shotID)[indxOrder]
+			Spectrum2D_sorted = np.asarray(Spectrum2D)[indxOrder] 
+			Spectrum1D_sorted = np.asarray(Spectrum1D)[indxOrder] 
+			Charge_sorted = np.asarray(Charge)[indxOrder]
+			totalEnergy_sorted = np.asarray(totalEnergy)[indxOrder] 
+			cutoffEnergy95_sorted = np.asarray(cutoffEnergy95)[indxOrder] 
+		
+		EnergyAxis = loadedData[0]
+
+		return shotID_sorted , EnergyAxis, Spectrum2D_sorted, Spectrum1D_sorted,Charge_sorted,totalEnergy_sorted,cutoffEnergy95_sorted
+		
+
 
 # HELPER FUNCTIONS 
 def getSortedFolderItems(itemPath,key):

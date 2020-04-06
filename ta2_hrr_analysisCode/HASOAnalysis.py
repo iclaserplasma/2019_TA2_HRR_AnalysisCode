@@ -304,7 +304,7 @@ def intgrad2(fx,fy,X,Y,f00):
 	A2 = csr_matrix((Af[:,5] , (Af[:,1].astype(int) ,(Af[:,3]).astype(int))),shape=(2*nx*ny,nx*ny))
 	A = A1+A2
 
-	Tmp = A.toarray()[:,0]
+	Tmp = A[:,0].toarray()
 
 	Tmp = Tmp.flatten()
 	
@@ -792,3 +792,66 @@ def createReference(inChamberHas,leakageHas):
 
 	return zernikeCoeffsIC_rot-zernikeCoeffsLK
 
+def readWavefrontFile(dataFile,verbose=False):
+	
+	# First split the HASO file into a wavefront
+	# and a pupil info file
+	if len(dataFile[0]) > 1:
+		# This means we have an array of filenames
+		# in this case pull in each file and average it
+		numFiles = len(dataFile)
+		nextFile = dataFile[0]
+	else:
+		numFiles = 1
+		nextFile = dataFile
+	
+	for i in range(numFiles):
+		if i > 0:
+			nextFile = dataFile[i]
+		
+		splitHASOFile(nextFile)
+		if verbose:
+			print('Reading In File' + nextFile)
+		# Read in the XML file
+		tree = ET.parse('Wavefront.xml')
+		root = tree.getroot()
+
+		# pull out the individual elements
+		n = int(root[0][1][0][0].text)
+		m = int(root[0][1][0][1].text)
+		step = float(root[0][1][1][0].text)
+		xSlopesAsText = root[0][1][2][0].text
+		ySlopesAsText = root[0][1][3][0].text
+		intensityAsText = root[0][1][4][0].text
+		pupilAsText = root[0][1][5][0].text
+
+		X = np.linspace(-n*step/2,n*step/2-step,n)
+		Y = np.linspace(-m*step/2,m*step/2-step,m)
+
+		if i == 0:
+			# Convert the text arrays to numpy arrays of floats
+			xSlopes = convertAsTextToArray(xSlopesAsText)
+			ySlopes = convertAsTextToArray(ySlopesAsText)
+			intensity = convertAsTextToArray(intensityAsText)
+			pupil = convertAsTextToArray(pupilAsText)
+		else:
+			xSlopes = xSlopes + convertAsTextToArray(xSlopesAsText)
+			ySlopes = ySlopes + convertAsTextToArray(ySlopesAsText)
+			intensity = intensity + convertAsTextToArray(intensityAsText)
+			pupil = pupil + convertAsTextToArray(pupilAsText)
+		
+		
+		# And finally finally finally, we must delete the temporary files
+		# that were created by splitHASOFiles
+		os.remove('Wavefront.xml')
+		try:
+			os.remove('Pupil.xml')
+		except:
+			print('No pupil.xml File Found to Delete')
+
+	xSlopes = xSlopes/numFiles
+	ySlopes = ySlopes/numFiles
+	intensity = intensity/numFiles
+	pupil = pupil/numFiles
+	pupil[np.where(pupil > 1/(numFiles+1))] = 1
+	return X,Y,xSlopes,ySlopes,intensity,pupil
