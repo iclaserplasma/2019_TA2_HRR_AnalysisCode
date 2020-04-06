@@ -1073,7 +1073,8 @@ class phi_to_rho(fourier_filter_for_Phasemask):
         self.q_e = 1.6e-19
         self.e_0 = 8.85e-12
         self.c = 3e8
-        self.sizePerPixel = mPerPix
+        self.sizePerPixel = mPerPix[0]
+        self.spatialCalErr = mPerPix[1]
         
         self.w_0 = (2 * np.pi * self.c ) / self.lambda_l
         self.n_c = (self.w_0**2 * self.m_e * self.e_0) / self.q_e**2   
@@ -1168,10 +1169,11 @@ class phi_to_rho(fourier_filter_for_Phasemask):
                 ax[1].set_ylabel("Plasma Density ($m^{-3}$)")
             plt.show()        
             
-        # Returns two arrays
+        # Returns three arrays
         # -- 2D Data: the x and y axis, the electron density, the phase shift
         # -- 1D Data: the lineout of n_e through the cell/nozzle
-        return (xAxis, yAxis, self.n_e, self.phase), np.c_[np.arange(len(lineout_ave)) * self.sizePerPixel *1e3, lineout_ave]
+        # -- Spatial Calibration and error
+        return (xAxis, yAxis, self.n_e, self.phase), np.c_[np.arange(len(lineout_ave)) * self.sizePerPixel *1e3, lineout_ave], [self.sizePerPixel, self.spatialCalErr]
         
         
         
@@ -1283,6 +1285,8 @@ def extract_plasma_density(data_file_s, calibrationData, analysisSavePath,
 
     assertCal_correct(nozzleOn, cellOn, cellChanging, calibrationData, verbose)
 
+    assert len(mPerPix) == 2, "The calibration hasn't been updated to include the error"
+
 
     if type(cellChanging) == tuple:
         print ("Cell length is changing")
@@ -1297,7 +1301,7 @@ def extract_plasma_density(data_file_s, calibrationData, analysisSavePath,
         actualCellLength_m = cellLengthForRun[:,1][burst_index] * 1e-3
 
         print (actualCellLength_m)
-        nPixels_Raw = int(actualCellLength_m / mPerPix)
+        nPixels_Raw = int(actualCellLength_m / mPerPix[0])
         #               Due to a coding quirk the pixels have to be even
         NewCropLength = ( (nPixels_Raw + offset)//2 ) * 2
         print ("Old", cellPC)
@@ -1325,9 +1329,9 @@ def extract_plasma_density(data_file_s, calibrationData, analysisSavePath,
                                     centreCoorsOfFringeRegion, mPerPix, mask_percentage, paddingX, paddingY, padSize, blurSize, verbose, visualise) 
                 except:
                     print ("\tFAILED: Cell Extraction")
-                    cellDensity = ([], [])    
+                    cellDensity = ([], [], [])    
             else:
-                cellDensity = ([], [])
+                cellDensity = ([], [], [])
 
             if nozzleOn:
                 try:
@@ -1336,16 +1340,22 @@ def extract_plasma_density(data_file_s, calibrationData, analysisSavePath,
                                     centreCoorsOfFringeRegion, mPerPix, mask_percentage, paddingX, paddingY, padSize, blurSize, verbose, visualise) 
                 except:
                     print ("\tFAILED: Nozzle Extraction")
-                    nozzleDensity = ([], [])
+                    nozzleDensity = ([], [], [])
             else:
-                nozzleDensity = ([], [])    
+                nozzleDensity = ([], [], [])    
         
-        output = (nozzleDensity, cellDensity)
+        # The spatial calibration is the same for both, so only store once.
+        nozzleDensity = nozzleDensity[:2]
+        cellDensity   = cellDensity[:2]
+        spatialCalData = cellDensity[-1]
+
+        output = (nozzleDensity, cellDensity, spatialCalData)
         burstData.append(output)
         
         folderpath = analysisSavePath.split("Probe_Interferometry_Analysis")[0]
         print ("Save the data: ", folderpath)
         func.check_and_makeFolder(folderpath)
+        # Each file consists of the nozzle, cell and spatial cal with error.
         np.save(analysisSavePath.split(".")[0]  +  imFile.split(".")[0].split('Shot')[1] + '.npy', output)
 
     return burstData
