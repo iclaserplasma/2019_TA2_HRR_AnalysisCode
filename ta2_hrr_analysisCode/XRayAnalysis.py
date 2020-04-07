@@ -441,7 +441,7 @@ def mainCalibrationFunction(runName, basePath='Z:\\', calPath='Y:\\ProcessedCali
             PixelSize = 13e-6
         else:
             PixelSize = 13e-6 * 4
-        GasCell2Camera = 1.2
+        GasCell2Camera = 1.228
         RepRate = 1
         Alpha = 274
         Alpha_error = 0.06
