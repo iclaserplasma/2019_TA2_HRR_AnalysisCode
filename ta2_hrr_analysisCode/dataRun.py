@@ -1373,6 +1373,8 @@ class dataRun:
 			Charge = []
 			totalEnergy = []
 			cutoffEnergy95 = []
+			imagedEDdOmega = []
+
 			shotID = []
 			for burst in bursts:
 				burstDir = os.path.join(runDir,burst)
@@ -1385,7 +1387,7 @@ class dataRun:
 								shotName = elem
 					# CIDU keep getting the following
 					# 	UnboundLocalError: local variable 'shotName' referenced before assignment
-					# WarpedImageWithoutBckgnd, E, Spectrum, Divergence, Charge, totalEnergy, cutOffEnergy95
+					# WarpedImageWithoutBckgnd, E, Spectrum, Divergence, Charge, totalEnergy, cutOffEnergy95, imagedEdOmega
 					shotID.append((burst+shotName))
 					Spectrum2D.append(loadedData[0])
 					Eaxis.append(loadedData[1][0]) # Pull out the main energy axis. Ignore errors for the moment
@@ -1394,6 +1396,7 @@ class dataRun:
 					Charge.append(loadedData[4][0]) # charge no error
 					totalEnergy.append(loadedData[5][0]) # similar
 					cutoffEnergy95.append(loadedData[6][0]) # similar
+					imagedEDdOmega.append(loadedData[7])
 							
 		else:
 			Spectrum2D = []
@@ -1404,7 +1407,8 @@ class dataRun:
 			totalEnergy = []
 			cutoffEnergy95 = []
 			shotID = []
-			
+			imagedEDdOmega = []
+
 			for burst in bursts:
 				burstDir = os.path.join(runDir,burst)
 				shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
@@ -1416,7 +1420,7 @@ class dataRun:
 				tmpCharge = []
 				tmpTotalEnergy = []
 				tmpCutOffEnergy = []
-
+				tmpImagedEDdOmega = []
 				for shot in shots:
 					shotPath = os.path.join(burstDir,shot)
 					loadedData = np.load(shotPath,allow_pickle=True) 
@@ -1428,7 +1432,8 @@ class dataRun:
 					tmpCharge.append(loadedData[4][0]) # charge no error
 					tmpTotalEnergy.append(loadedData[5][0]) # similar
 					tmpCutOffEnergy.append(loadedData[6][0]) # similar
-						
+					tmpImagedEDdOmega.append(loadedData[7])
+
 				shotID.append(burst)        
 				Spectrum2D.append((np.mean(tmpSpec2D),np.std(tmpSpec2D)))
 				Eaxis.append((np.mean(tmpEaxis),np.std(tmpEaxis)))
@@ -1437,6 +1442,7 @@ class dataRun:
 				Charge.append((np.mean(tmpCharge),np.std(tmpCharge)))
 				totalEnergy.append((np.mean(tmpTotalEnergy),np.std(tmpTotalEnergy)))
 				cutoffEnergy95.append((np.mean(tmpCutOffEnergy),np.std(tmpCutOffEnergy)))
+				imagedEDdOmega.append((np.mean(tmpImagedEDdOmega),np.std(tmpImagedEDdOmega)))
 
 		if 'Shot' in shotID[0]:
 			# Shots
@@ -1464,6 +1470,7 @@ class dataRun:
 			Charge_sorted = np.asarray(Charge)[indxOrder]
 			totalEnergy_sorted = np.asarray(totalEnergy)[indxOrder] 
 			cutoffEnergy95_sorted = np.asarray(cutoffEnergy95)[indxOrder] 
+			imagedEDdOmega_sorted = np.asarray(imagedEDdOmega)[indxOrder] 
 
 		else:
 			# bursts
@@ -1479,9 +1486,10 @@ class dataRun:
 			Charge_sorted = np.asarray(Charge)[indxOrder]
 			totalEnergy_sorted = np.asarray(totalEnergy)[indxOrder] 
 			cutoffEnergy95_sorted = np.asarray(cutoffEnergy95)[indxOrder] 
+			imagedEDdOmega_sorted = np.asarray(imagedEDdOmega)[indxOrder] 
 
 		# WarpedImageWithoutBckgnd, E, Spectrum, Divergence, Charge, totalEnergy, cutOffEnergy95
-		return shotID_sorted , Eaxis_sorted, Spectrum2D_sorted, Spectrum1D_sorted,Divergence_sorted,Charge_sorted,totalEnergy_sorted,cutoffEnergy95_sorted
+		return shotID_sorted , Eaxis_sorted, Spectrum2D_sorted, Spectrum1D_sorted,Divergence_sorted,Charge_sorted,totalEnergy_sorted,cutoffEnergy95_sorted,imagedEDdOmega_sorted
 		
 
 
