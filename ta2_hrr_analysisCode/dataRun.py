@@ -763,7 +763,7 @@ class dataRun:
 	# -----								LOADING ANALYSED DATA FUNCTION CALLS										-----
 	# -------------------------------------------------------------------------------------------------------------------
 
-	def load_Avergaed_ESpecData(self):
+	def load_Averaged_ESpecData(self):
 		# General function to pull in the electron spectrum data
 		# Each shot has 5 data points saved:
 		# WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95
