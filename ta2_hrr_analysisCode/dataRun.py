@@ -346,7 +346,7 @@ class dataRun:
 					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_NoCalibration_'+shotID)
 					self.saveData(analysisSavePath,analysedData)
 			self.logThatShit('Performed HighESpec Analysis for ' + burstStr)
-			print('Analysed ESpec Spectrum, Charge, totalEnergy, cutoffEnergy95 for '+ burstStr)
+			print('Analysed ESpec for '+ burstStr)
 
 	# SPIDER ANALYSIS CALLS 
 	def performSPIDERAnalysis(self):
@@ -1489,7 +1489,7 @@ class dataRun:
 			imagedEDdOmega_sorted = np.asarray(imagedEDdOmega)[indxOrder] 
 
 		# WarpedImageWithoutBckgnd, E, Spectrum, Divergence, Charge, totalEnergy, cutOffEnergy95
-		return shotID_sorted , Eaxis_sorted, Spectrum2D_sorted, Spectrum1D_sorted,Divergence_sorted,Charge_sorted,totalEnergy_sorted,cutoffEnergy95_sorted,imagedEDdOmega_sorted
+		return shotID_sorted , Eaxis_sorted, Spectrum2D_sorted, Spectrum1D_sorted, Divergence_sorted,Charge_sorted,totalEnergy_sorted,cutoffEnergy95_sorted,imagedEDdOmega_sorted
 		
 
 
