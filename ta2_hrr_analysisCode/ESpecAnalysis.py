@@ -127,6 +127,8 @@ def analyseImage(rawImage, calibrationTuple):
     Charge - charge of the electron beam in fC [charge, standard error of the charge]
     totalEnergy - integrated energy of the electron beam in J [average energy, [upper limit, lower limit]]
     cutOffEnergy95 - cut off energy at 95% charge of the electron beam in MeV, [upper limit, lower limit]]
+    imagedEdOmega - this is the warped image without background in fC / MeV / mrad, which is the first output argument divided by
+        the energy width per pixel and divided by the steradiant per pixel (latter the width of the pixel / propagation length)
     """
     _, _, _, _, L, _, BackgroundNoise, _ = calibrationTuple
     # preparation of the calibration parameter (later move into the calibration prep above)
@@ -147,10 +149,12 @@ def analyseImage(rawImage, calibrationTuple):
     ChargeStd = np.sum(WarpedImageWithoutBckgnd)/fCperCounts*fCperCountsSigma
     Charge = [ChargeAv, ChargeStd]
     # correctly integrating the spectrum and change the units from counts/mm -> counts/MeV
-    Spectrum, Divergence, E, dxoverdE = getDivergenceAndEnergySpectrum(WarpedImageWithoutBckgnd, calibrationTuple)
+    Spectrum, Divergence, E, dxoverdE, dOmega = getDivergenceAndEnergySpectrum(WarpedImageWithoutBckgnd, calibrationTuple)
+    dEdOmega = np.tile(np.mean( np.diff( L ) )/dxoverdE[0], (WarpedImageWithoutBckgnd.shape[0], 1)) * dOmega
+    imagedEdOmega = WarpedImageWithoutBckgnd / dEdOmega
     cutOffEnergy95 = dataDistributer(determine95percentCharge, E, Spectrum, dxoverdE, BackgroundNoise, L)
     totalEnergy = dataDistributer(determineTotalEnergy, E, Spectrum, dxoverdE, BackgroundNoise, L)
-    return WarpedImageWithoutBckgnd, E, Spectrum, Divergence, Charge, totalEnergy, cutOffEnergy95
+    return WarpedImageWithoutBckgnd, E, Spectrum, Divergence, Charge, totalEnergy, cutOffEnergy95, imagedEdOmega
 
 
 def findFirstLastTruth(AboveFWHM):
@@ -196,6 +200,7 @@ def getDivergenceAndEnergySpectrum(image, calibrationTuple):
     CMS = np.sum( WMatrix * CroppedImage, axis=0) / normFac
     # the total length of flight:
     TotalLengthOfFlight = np.sqrt( PropL**2  + (CMS*1e-3)**2 )
+    dOmega = np.mean(np.diff(W)) / ( np.sqrt(  np.tile(PropL**2, (image.shape[0], 1)) + np.tile((W*1e-3)**2, (image.shape[1], 1)).transpose() ) )
     #  the FWHM for each length (0 if it does not fulfill the criteria)
     FWHM = FWHMCalculator(CroppedImage, W)
     # and finally the divergence for each length and then averaged with a weightening on the signal strength:
@@ -213,7 +218,7 @@ def getDivergenceAndEnergySpectrum(image, calibrationTuple):
     SpectrumPos = electronSpectrum(image, dxoverdE[1][0], L)
     SpectrumNeg = electronSpectrum(image, dxoverdE[1][1], L)
     Spectrum = [SpectrumAv, [SpectrumPos, SpectrumNeg]]
-    return Spectrum, [AveragedDivergence, StdDivergence], E, dxoverdE
+    return Spectrum, [AveragedDivergence, StdDivergence], E, dxoverdE, dOmega
 
 
 def dataDistributer(Fcn, E, Spectrum, dxoverdE, BackgroundNoise, L):
