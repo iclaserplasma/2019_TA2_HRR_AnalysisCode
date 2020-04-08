@@ -1315,7 +1315,7 @@ class dataRun:
 		Each analysed image has data stored in the form 
 		WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95,
 
-		NOTE: getShots = False, does not work...need to use getShots=True
+		NOTE: getShots = False is now working CIDU
 		'''
 		
 		baseAnalysisFolder = self.baseAnalysisFolder
@@ -1359,52 +1359,7 @@ class dataRun:
 					cutoffEnergy95.append(loadedData[6][0]) # similar
 					imagedEDdOmega.append(loadedData[7])
 							
-		else:
-			# Spectrum2D = []
-			# Eaxis = []
-			# Spectrum1D = []
-			# Divergence = []
-			# Charge = []
-			# totalEnergy = []
-			# cutoffEnergy95 = []
-			# shotID = []
-			# imagedEDdOmega = []
-
-			# for burst in bursts:
-			# 	burstDir = os.path.join(runDir,burst)
-			# 	shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
-
-			# 	tmpSpec2D = []
-			# 	tmpEaxis = []
-			# 	tmpSpec1D = []
-			# 	tmpDivergence =[]
-			# 	tmpCharge = []
-			# 	tmpTotalEnergy = []
-			# 	tmpCutOffEnergy = []
-			# 	tmpImagedEDdOmega = []
-			# 	for shot in shots:
-			# 		shotPath = os.path.join(burstDir,shot)
-			# 		loadedData = np.load(shotPath,allow_pickle=True) 
-				
-			# 		tmpSpec2D.append(loadedData[0])
-			# 		tmpEaxis.append(loadedData[1][0]) # Pull out the main energy axis. Ignore errors for the moment
-			# 		tmpSpec1D.append(loadedData[2][0]) # Pull out the main spectrum. Ignore errors for the moment
-			# 		tmpDivergence.append(loadedData[3][0]) # Divergence only, no error
-			# 		tmpCharge.append(loadedData[4][0]) # charge no error
-			# 		tmpTotalEnergy.append(loadedData[5][0]) # similar
-			# 		tmpCutOffEnergy.append(loadedData[6][0]) # similar
-			# 		tmpImagedEDdOmega.append(loadedData[7])
-
-			# 	shotID.append(burst)        
-			# 	Spectrum2D.append((np.mean(tmpSpec2D),np.std(tmpSpec2D)))
-			# 	Eaxis.append((np.mean(tmpEaxis),np.std(tmpEaxis)))
-			# 	Spectrum1D.append((np.mean(tmpSpec1D),np.std(tmpSpec1D)))
-			# 	Divergence.append((np.mean(tmpDivergence),np.std(tmpDivergence)))
-			# 	Charge.append((np.mean(tmpCharge),np.std(tmpCharge)))
-			# 	totalEnergy.append((np.mean(tmpTotalEnergy),np.std(tmpTotalEnergy)))
-			# 	cutoffEnergy95.append((np.mean(tmpCutOffEnergy),np.std(tmpCutOffEnergy)))
-			# 	imagedEDdOmega.append((np.mean(tmpImagedEDdOmega),np.std(tmpImagedEDdOmega)))
-			
+		else:			
 			Spectrum2D = []
 			Eaxis = []
 			Spectrum1D = []
@@ -1484,16 +1439,7 @@ class dataRun:
 				cutoffEnergy95.append( [burst_cutE95, burst_cutE95_std] )
 				imagedEDdOmega.append( [burst_ImdEdw, burst_ImdEdw_std] )
 
-			# Convert to np.arrays
-			Eaxis      = np.array( Eaxis  )
-			Spectrum1D = np.array( Spectrum1D)
-			Spectrum2D = np.array( Spectrum2D)
-			Divergence = np.array( Divergence)
-			Charge     = np.array( Charge )
-			totalEnergy    = np.array( totalEnergy)
-			cutoffEnergy95 = np.array( cutoffEnergy95)
-			imagedEDdOmega = np.array( imagedEDdOmega)
-
+		# Sorting the data to be in the correct order
 		if 'Shot' in shotID[0]:
 			# Shots
 			burstNums = []
