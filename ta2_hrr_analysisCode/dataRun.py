@@ -270,12 +270,12 @@ class dataRun:
 		# Creates the shotID from the file path that can be used on all systems.
 		# Windows uses \ and unix uses / to seperate folders
 		if "\\" in fileName:
-			shotID = shotFile.split('\\')[-1].split('.')[0]
+			shotID = fileName.split('\\')[-1].split('.')[0]
 		elif "/" in fileName:
-			shotID = shotFile.split('/')[-1].split('.')[0]
+			shotID = fileName.split('/')[-1].split('.')[0]
 		else:
 			print ("Neither folder indicator found in filepath")
-			shotID = shotFile.split('.')[0]
+			shotID = fileName.split('.')[0]
 		return shotID
 
 
@@ -344,7 +344,7 @@ class dataRun:
 			print (burstStr)	
 			if useCalibration:
 				for shotFile in filePathDict[burstStr]:
-					shotID = shotID_from_filepath(shotFile)
+					shotID = self.shotID_from_filepath(shotFile)
 					analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile,eSpecCalib)
 					# Save the data
 					print (shotFile, shotID)
@@ -353,7 +353,7 @@ class dataRun:
 
 			else:
 				for shotFile in filePathDict[burstStr]:
-					shotID = shotID_from_filepath(shotFile)
+					shotID = self.shotID_from_filepath(shotFile)
 					analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile)
 					# Save the data
 					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_NoCalibration_'+shotID)
@@ -407,7 +407,7 @@ class dataRun:
 				if getIndividualShots:
 					for shotFile in filePathDict[burstStr]:
 						# Check if analysis already exists:
-						shotID = shotID_from_filepath(shotFile)
+						shotID = self.shotID_from_filepath(shotFile)
 						fileCheck = os.path.exists(os.path.join(analysisPath,burstStr,shotID+'.npy'))
 						if fileCheck and not overwriteAnalysis:
 							print(burstStr + ' ' + shotID +': Already Analysed')
@@ -426,7 +426,7 @@ class dataRun:
 				if getIndividualShots:
 					for shotFile in filePathDict[burstStr]:
 						# Check if analysis already exists:
-						shotID = shotID_from_filepath(shotFile)
+						shotID = self.shotID_from_filepath(shotFile)
 						fileCheck = os.path.exists(os.path.join(analysisPath,burstStr,shotID+'.npy'))
 						if fileCheck and not overwriteAnalysis:
 							print(burstStr + ' ' + shotID +': Already Analysed')
