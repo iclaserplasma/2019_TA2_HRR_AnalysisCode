@@ -728,19 +728,19 @@ class dataRun:
 		import pandas as pd
 
 		def db_index(db, dateRunString, diag):
-		    # Located the region in the database that corresponds to the correct run and diagnostic
-		    runCalFiles = db[db[' '] == dateRunString]
-		    keys = db.keys().tolist()
+			# Located the region in the database that corresponds to the correct run and diagnostic
+			runCalFiles = db[db[' '] == dateRunString]
+			keys = db.keys().tolist()
 		#     print (runCalFiles)
 			# Find the index of the run
-		    inds = db.index[db[' '] == dateRunString].tolist()[0]
-		    for i, k in enumerate(keys):
-		    	# Find the index of the diag (column)
-		        if k == diag:
-		            keyIndex = i
+			inds = db.index[db[' '] == dateRunString].tolist()[0]
+			for i, k in enumerate(keys):
+				# Find the index of the diag (column)
+				if k == diag:
+					keyIndex = i
 			# print ("Database Index")
 			# print(inds, keyIndex)		            
-		    return inds, keyIndex
+			return inds, keyIndex
 
 		db = pd.read_csv(calibrationPath)
 		inds, keyIndex = db_index(db, dateRunString, diag)
@@ -1303,6 +1303,12 @@ class dataRun:
 		else:
 			return shotID_sorted, z4_sorted
 
+	def appendDataToLists(self, data, lists):
+	    assert len(data) == len(lists)
+	    for d, l in zip(data, lists):
+	        l.append(d)
+	    return lists			
+
 	def loadAnalysedESpec(self,getShots=True):
 		''' Retrieves the Analysed ESpec data
 
@@ -1354,6 +1360,51 @@ class dataRun:
 					imagedEDdOmega.append(loadedData[7])
 							
 		else:
+			# Spectrum2D = []
+			# Eaxis = []
+			# Spectrum1D = []
+			# Divergence = []
+			# Charge = []
+			# totalEnergy = []
+			# cutoffEnergy95 = []
+			# shotID = []
+			# imagedEDdOmega = []
+
+			# for burst in bursts:
+			# 	burstDir = os.path.join(runDir,burst)
+			# 	shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
+
+			# 	tmpSpec2D = []
+			# 	tmpEaxis = []
+			# 	tmpSpec1D = []
+			# 	tmpDivergence =[]
+			# 	tmpCharge = []
+			# 	tmpTotalEnergy = []
+			# 	tmpCutOffEnergy = []
+			# 	tmpImagedEDdOmega = []
+			# 	for shot in shots:
+			# 		shotPath = os.path.join(burstDir,shot)
+			# 		loadedData = np.load(shotPath,allow_pickle=True) 
+				
+			# 		tmpSpec2D.append(loadedData[0])
+			# 		tmpEaxis.append(loadedData[1][0]) # Pull out the main energy axis. Ignore errors for the moment
+			# 		tmpSpec1D.append(loadedData[2][0]) # Pull out the main spectrum. Ignore errors for the moment
+			# 		tmpDivergence.append(loadedData[3][0]) # Divergence only, no error
+			# 		tmpCharge.append(loadedData[4][0]) # charge no error
+			# 		tmpTotalEnergy.append(loadedData[5][0]) # similar
+			# 		tmpCutOffEnergy.append(loadedData[6][0]) # similar
+			# 		tmpImagedEDdOmega.append(loadedData[7])
+
+			# 	shotID.append(burst)        
+			# 	Spectrum2D.append((np.mean(tmpSpec2D),np.std(tmpSpec2D)))
+			# 	Eaxis.append((np.mean(tmpEaxis),np.std(tmpEaxis)))
+			# 	Spectrum1D.append((np.mean(tmpSpec1D),np.std(tmpSpec1D)))
+			# 	Divergence.append((np.mean(tmpDivergence),np.std(tmpDivergence)))
+			# 	Charge.append((np.mean(tmpCharge),np.std(tmpCharge)))
+			# 	totalEnergy.append((np.mean(tmpTotalEnergy),np.std(tmpTotalEnergy)))
+			# 	cutoffEnergy95.append((np.mean(tmpCutOffEnergy),np.std(tmpCutOffEnergy)))
+			# 	imagedEDdOmega.append((np.mean(tmpImagedEDdOmega),np.std(tmpImagedEDdOmega)))
+			
 			Spectrum2D = []
 			Eaxis = []
 			Spectrum1D = []
@@ -1361,43 +1412,87 @@ class dataRun:
 			Charge = []
 			totalEnergy = []
 			cutoffEnergy95 = []
-			shotID = []
 			imagedEDdOmega = []
+			shotID = []
 
-			for burst in bursts:
+
+			for burst in bursts[:]:
+				print ("loading ",diag,  burst)
 				burstDir = os.path.join(runDir,burst)
 				shots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
-
-				tmpSpec2D = []
-				tmpEaxis = []
-				tmpSpec1D = []
-				tmpDivergence =[]
-				tmpCharge = []
-				tmpTotalEnergy = []
-				tmpCutOffEnergy = []
-				tmpImagedEDdOmega = []
-				for shot in shots:
-					shotPath = os.path.join(burstDir,shot)
-					loadedData = np.load(shotPath,allow_pickle=True) 
 				
-					tmpSpec2D.append(loadedData[0])
-					tmpEaxis.append(loadedData[1][0]) # Pull out the main energy axis. Ignore errors for the moment
-					tmpSpec1D.append(loadedData[2][0]) # Pull out the main spectrum. Ignore errors for the moment
-					tmpDivergence.append(loadedData[3][0]) # Divergence only, no error
-					tmpCharge.append(loadedData[4][0]) # charge no error
-					tmpTotalEnergy.append(loadedData[5][0]) # similar
-					tmpCutOffEnergy.append(loadedData[6][0]) # similar
-					tmpImagedEDdOmega.append(loadedData[7])
-
+				aveEaxis =[] 
+				aveSpec1D=[] 
+				aveSpec2D=[]   
+				aveDiv   =[] 
+				aveCharge=[] 
+				aveTotE  =[] 
+				aveCutE95=[] 
+				aveImdEdw=[] 
+				ave = [aveEaxis, aveSpec1D, aveSpec2D, aveDiv, aveCharge,
+					   aveTotE, aveCutE95, aveImdEdw]
+				
+				for shot in shots[:]:
+					shotPath = os.path.join(burstDir,shot)
+					# loadedData is 8 items
+					loadedData = np.load(shotPath,allow_pickle=True) 
+					 # Pull out the main axis. Ignore errors for the moment
+					shot_EnergyAxis = loadedData[1][0]
+					shot_spectrum1D = loadedData[2][0]
+					shot_spectrum2D = loadedData[0]
+					shot_divergence = loadedData[3][0]
+					shot_charge     = loadedData[4][0]
+					shot_totalEnergy    = loadedData[5][0]
+					shot_cutoffEnergy95 = loadedData[6][0]
+					shot_imagedEDdOmega = loadedData[7]
+					dataLists = [shot_EnergyAxis, shot_spectrum1D, shot_spectrum2D, 
+								 shot_divergence, shot_charge, shot_totalEnergy, 
+								 shot_cutoffEnergy95, shot_imagedEDdOmega] 
+					ave = self.appendDataToLists(dataLists, ave)
+				aveEaxis, aveSpec1D, aveSpec2D, aveDiv, aveCharge, aveTotE, aveCutE95, aveImdEdw = ave
+				# Is the energy axis always the same?
+				for i in range(1, len (aveEaxis)):
+					assert (aveEaxis[0] == aveEaxis[i]).all(), 'Energy axis is change\nWill have to do something like interpolation to solve this'
+					
+				# Create averages per burst
+				burst_Eaxis  = np.average(aveEaxis, axis = 0 )
+				burst_spec1D = np.average(aveSpec1D, axis = 0 )
+				burst_spec2D = np.average(aveSpec2D, axis = 0 )
+				burst_div    = np.average(aveDiv,    axis = 0 )
+				burst_charge = np.average(aveCharge, axis = 0 )
+				burst_totE   = np.average(aveTotE,   axis = 0 )
+				burst_cutE95 = np.average(aveCutE95, axis = 0 )
+				burst_ImdEdw = np.average(aveImdEdw, axis = 0 )
+				
+				# burst_Eaxis_std  = np.std(aveEaxis, axis = 0 )
+				burst_spec1D_std = np.std(aveSpec1D, axis = 0 )
+				burst_spec2D_std = np.std(aveSpec2D, axis = 0 )
+				burst_div_std    = np.std(aveDiv,    axis = 0 )
+				burst_charge_std = np.std(aveCharge, axis = 0 )
+				burst_totE_std   = np.std(aveTotE,   axis = 0 )
+				burst_cutE95_std = np.std(aveCutE95, axis = 0 )
+				burst_ImdEdw_std = np.std(aveImdEdw, axis = 0 )    
+				
+				# Append to the lists
 				shotID.append(burst)        
-				Spectrum2D.append((np.mean(tmpSpec2D),np.std(tmpSpec2D)))
-				Eaxis.append((np.mean(tmpEaxis),np.std(tmpEaxis)))
-				Spectrum1D.append((np.mean(tmpSpec1D),np.std(tmpSpec1D)))
-				Divergence.append((np.mean(tmpDivergence),np.std(tmpDivergence)))
-				Charge.append((np.mean(tmpCharge),np.std(tmpCharge)))
-				totalEnergy.append((np.mean(tmpTotalEnergy),np.std(tmpTotalEnergy)))
-				cutoffEnergy95.append((np.mean(tmpCutOffEnergy),np.std(tmpCutOffEnergy)))
-				imagedEDdOmega.append((np.mean(tmpImagedEDdOmega),np.std(tmpImagedEDdOmega)))
+				Eaxis.append(          burst_Eaxis                    )
+				Spectrum1D.append(     [burst_spec1D, burst_spec1D_std] )
+				Spectrum2D.append(     [burst_spec2D, burst_spec2D_std] )
+				Divergence.append(     [burst_div,    burst_div_std   ] )
+				Charge.append(         [burst_charge, burst_charge_std] )
+				totalEnergy.append(    [burst_totE  , burst_totE_std  ] )
+				cutoffEnergy95.append( [burst_cutE95, burst_cutE95_std] )
+				imagedEDdOmega.append( [burst_ImdEdw, burst_ImdEdw_std] )
+
+			# Convert to np.arrays
+			Eaxis      = np.array( Eaxis  )
+			Spectrum1D = np.array( Spectrum1D)
+			Spectrum2D = np.array( Spectrum2D)
+			Divergence = np.array( Divergence)
+			Charge     = np.array( Charge )
+			totalEnergy    = np.array( totalEnergy)
+			cutoffEnergy95 = np.array( cutoffEnergy95)
+			imagedEDdOmega = np.array( imagedEDdOmega)
 
 		if 'Shot' in shotID[0]:
 			# Shots
