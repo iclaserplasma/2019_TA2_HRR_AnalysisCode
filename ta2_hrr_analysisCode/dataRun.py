@@ -324,7 +324,7 @@ class dataRun:
 				print('Analysed Probe_Interferometry '+ burstStr)
 
 	# ELECTRON ANALYSIS 
-	def performESpecAnalysis(self,useCalibration=True):
+	def performESpecAnalysis(self,useCalibration=True, overwrite = False):
 		# Load the espec images for the run and analyse
 		# if it exists get it, if not, run initESpecAnalysis and update log
 		try:
@@ -345,19 +345,35 @@ class dataRun:
 			if useCalibration:
 				for shotFile in filePathDict[burstStr]:
 					shotID = self.shotID_from_filepath(shotFile)
-					analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile,eSpecCalib)
-					# Save the data
-					print (shotFile, shotID)
 					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_'+shotID)
-					self.saveData(analysisSavePath,analysedData)
+					fileExists = os.path.exists(analysisSavePath)
+					extract = True
+					if not overwrite:
+						if fileExists:
+							extract = False
+							print ("Data already extracted for ", burst, shotID)
+					if extract:
+						analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile,eSpecCalib)
+						# Save the data
+						print ('Saving:', shotFile, shotID)
+						self.saveData(analysisSavePath,analysedData)
 
 			else:
 				for shotFile in filePathDict[burstStr]:
 					shotID = self.shotID_from_filepath(shotFile)
-					analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile)
 					# Save the data
 					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_NoCalibration_'+shotID)
-					self.saveData(analysisSavePath,analysedData)
+					fileExists = os.path.exists(analysisSavePath)
+					extract = True
+					if not overwrite:
+						if fileExists:
+							extract = False
+							print ("Data already extracted for ", burst, shotID)
+					if extract:
+						analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile)
+						# Save the data
+						print ('Saving:', shotFile, shotID)
+						self.saveData(analysisSavePath,analysedData)
 			self.logThatShit('Performed HighESpec Analysis for ' + burstStr)
 			print('Analysed ESpec for '+ burstStr)
 
@@ -1304,10 +1320,10 @@ class dataRun:
 			return shotID_sorted, z4_sorted
 
 	def appendDataToLists(self, data, lists):
-	    assert len(data) == len(lists)
-	    for d, l in zip(data, lists):
-	        l.append(d)
-	    return lists			
+		assert len(data) == len(lists)
+		for d, l in zip(data, lists):
+			l.append(d)
+		return lists			
 
 	def loadAnalysedESpec(self,getShots=True):
 		''' Retrieves the Analysed ESpec data
@@ -1405,9 +1421,29 @@ class dataRun:
 								 shot_cutoffEnergy95, shot_imagedEDdOmega] 
 					ave = self.appendDataToLists(dataLists, ave)
 				aveEaxis, aveSpec1D, aveSpec2D, aveDiv, aveCharge, aveTotE, aveCutE95, aveImdEdw = ave
-				# Is the energy axis always the same?
-				for i in range(1, len (aveEaxis)):
-					assert (aveEaxis[0] == aveEaxis[i]).all(), 'Energy axis is change\nWill have to do something like interpolation to solve this'
+				# #    # Is the energy axis always the same?
+				# for i in range(1, len (aveEaxis)):
+				#     print(i, (aveEaxis[0] == aveEaxis[i]).all())
+				#     # assert (aveEaxis[0] == aveEaxis[i]).all(), 'Energy axis is change\nWill have to do something like interpolation to solve this'
+					
+				# Working out how to join energy axes
+				arrE = np.array(aveEaxis)
+				uniqueEnergy =  np.unique(aveEaxis, axis = 0)    
+				numberOfEnergyAxes, _ = uniqueEnergy.shape        
+				
+				print (numberOfEnergyAxes)  
+				if numberOfEnergyAxes > 1:
+					from scipy.interpolate import interp1d
+					print ("the energy axis is changing in this burst")
+					newEAxis = np.linspace(arrE[:,0].max(), arrE[:,-1].min(), num = len(arrE))
+					newSpec = []
+					for i, _ in enumerate(aveSpec1D):
+						f = interp1d(aveEaxis[i], aveSpec1D[i], kind = 'cubic')
+						newSpec.append( f(newEAxis))
+					burst_spec1D = newSpec
+					burst_Eaxis = newEAxis 
+				else:
+					burst_Eaxis = aveEaxis[0]
 					
 				# Create averages per burst
 				burst_Eaxis  = np.average(aveEaxis, axis = 0 )
