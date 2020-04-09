@@ -640,7 +640,7 @@ class dataRun:
 
 		# Find the first peak of the FFT that isn't the DC peak
 		peaks,properties = find_peaks(BFT)
-		sortedIndexs = np.argsort(BFT[peaks]) # sorts in ascending order
+		sortedIndexs = np.argsort(BFT[peaks]) # sorts in ascending order
 		sortedIndexs[-2:]
 		peaks = peaks[sortedIndexs[-2:]]
 		peak = np.amin(peaks)
@@ -828,7 +828,7 @@ class dataRun:
 				shotID.append(burst)
 				imgCounts.append((np.mean(tmpImgCounts),np.std(tmpImgCounts)))
 		
-		# NOW SORT THE DATA
+		# NOW SORT THE DATA
 		if 'Shot' in shotID[0]:
 			# Shots
 			burstNums = []
@@ -902,7 +902,7 @@ class dataRun:
 				shotID.append(burst)
 				laserEnergy.append((np.mean(shotLaserEnergy),np.std(shotLaserEnergy)))
 		
-		# NOW SORT THE DATA
+		# NOW SORT THE DATA
 		if 'Shot' in shotID[0]:
 			# Shots
 			burstNums = []
@@ -934,6 +934,104 @@ class dataRun:
 		
 		return shotID_sorted,laserEnergy_sorted    
 
+	def loadPlasmaDensity(self, getShots=False,removeDuds=True):
+		# Retrieves the plasma density from the probe data.
+		# Note that only runs where the cell is >~ 1.8 mm can the
+		# density be extracted.
+
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+
+		diag = 'Probe_Interferometry'
+			
+		runDir = os.path.join(baseAnalysisFolder , diag,  runDate , runName)
+		bursts = [f for f in os.listdir(runDir) if not f.startswith('.')]
+		# Sort bursts here so the rest is ordered
+		bursts = sorted(bursts, key = lambda x: int(x.split('rst')[1]) )			
+			
+		if getShots:
+			shotID = []
+			Ne_lineout = []
+			for burst in bursts[:]:
+				burstDir = os.path.join(runDir,burst)
+				shots = [f for f in os.listdir(burstDir) if not f.startswith('.') and not f.startswith('Probe_Interferometry_Analysis.npy') ]
+				# Sort shots here so the rest is ordered
+				shots = sorted(shots, key = lambda x: int(x.split('Analysis')[1].split(".")[0]) )	
+				burstAverage = []
+				xAxis = []        
+				for shot in shots[:]:
+					shotName = 'Shot' +shot.split('Probe_Interferometry_Analysis')[1].split('.')[0]
+					shotPath = os.path.join(burstDir,shot)
+					print ("loading", burst+shotName)
+
+					data = np.load(shotPath, allow_pickle = True)
+					try:
+						cell = 1
+						_, l = data[cell]
+						if np.sum(l[:,1]) < 0:
+							# Return positive values
+							l[:,1] *= -1
+					except:
+						l = []
+
+					# shotID = 'Burst1Shot1'
+					shotID.append((burst+shotName))
+					print (burst+shotName, shotID)
+					Ne_lineout.append( l )
+
+		else:
+			shotID = []
+			Ne_lineout = []
+			for burst in bursts[:]:
+				print ("loading", burst)
+				burstDir = os.path.join(runDir,burst)
+				shots = [f for f in os.listdir(burstDir) if not f.startswith('.') and not f.startswith('Probe_Interferometry_Analysis.npy') ]
+				# Sort shots here so the rest is ordered
+				print (shots)
+				shots = sorted(shots, key = lambda x: int(x.split('Analysis')[1].split(".")[0]) )	
+				burstAverage = []
+				xAxis = []        
+				for shot in shots[:]:
+					shotPath = os.path.join(burstDir,shot)
+					# print (shotPath)
+					# shotID = 'Burst1'
+					
+					data = np.load(shotPath, allow_pickle = True)
+					try:
+						cell = 1
+
+						arr, l = data[cell]
+						if np.sum(l[:,1]) < 0:
+							# Return positive values
+							l[:,1] *= -1                
+						burstAverage.append(l[:,1])
+						# print (l[:,0][0], l[:,0][-1], len(l[:,0]) )
+						if len(l[:,0])> len(xAxis):
+							xAxis = l[:,0]
+					except:
+						pass
+					
+				# Make all the arrays the same size
+				endIndex = 100000000
+				for l in burstAverage:
+					if endIndex > len(l):
+						endIndex = len(l)                
+				sameSizeArr = []
+				for l in burstAverage:
+					sameSizeArr.append(l[:endIndex])
+				xAxis = xAxis[:endIndex]
+					
+				# Average the array
+				lout = np.average(sameSizeArr, axis = 0)    
+				shotID.append((burst))
+				# print (burst, shotID)
+				Ne_lineout.append( np.c_[xAxis, lout] )              
+
+		print (shotID, np.shape(Ne_lineout))
+		return shotID, Ne_lineout
+########			
+			
 
 	def loadAnalysedSpecPhase(self, getShots=False,removeDuds=True):
 		# Retrieves the spectral phase from the spider
