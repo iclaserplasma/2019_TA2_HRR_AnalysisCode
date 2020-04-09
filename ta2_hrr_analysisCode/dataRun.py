@@ -324,7 +324,7 @@ class dataRun:
 				print('Analysed Probe_Interferometry '+ burstStr)
 
 	# ELECTRON ANALYSIS 
-	def performESpecAnalysis(self,useCalibration=True):
+	def performESpecAnalysis(self,useCalibration=True, overwrite = False):
 		# Load the espec images for the run and analyse
 		# if it exists get it, if not, run initESpecAnalysis and update log
 		try:
@@ -345,19 +345,35 @@ class dataRun:
 			if useCalibration:
 				for shotFile in filePathDict[burstStr]:
 					shotID = self.shotID_from_filepath(shotFile)
-					analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile,eSpecCalib)
-					# Save the data
-					print (shotFile, shotID)
 					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_'+shotID)
-					self.saveData(analysisSavePath,analysedData)
+					fileExists = os.path.exists(analysisSavePath)
+					extract = True
+					if not overwrite:
+						if fileExists:
+							extract = False
+							print ("Data already extracted for ", burst, shotID)
+					if extract:
+						analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile,eSpecCalib)
+						# Save the data
+						print ('Saving:', shotFile, shotID)
+						self.saveData(analysisSavePath,analysedData)
 
 			else:
 				for shotFile in filePathDict[burstStr]:
 					shotID = self.shotID_from_filepath(shotFile)
-					analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile)
 					# Save the data
 					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_NoCalibration_'+shotID)
-					self.saveData(analysisSavePath,analysedData)
+					fileExists = os.path.exists(analysisSavePath)
+					extract = True
+					if not overwrite:
+						if fileExists:
+							extract = False
+							print ("Data already extracted for ", burst, shotID)
+					if extract:
+						analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile)
+						# Save the data
+						print ('Saving:', shotFile, shotID)
+						self.saveData(analysisSavePath,analysedData)
 			self.logThatShit('Performed HighESpec Analysis for ' + burstStr)
 			print('Analysed ESpec for '+ burstStr)
 
@@ -624,7 +640,7 @@ class dataRun:
 
 		# Find the first peak of the FFT that isn't the DC peak
 		peaks,properties = find_peaks(BFT)
-		sortedIndexs = np.argsort(BFT[peaks]) # sorts in ascending order
+		sortedIndexs = np.argsort(BFT[peaks]) # sorts in ascending order
 		sortedIndexs[-2:]
 		peaks = peaks[sortedIndexs[-2:]]
 		peak = np.amin(peaks)
@@ -812,7 +828,7 @@ class dataRun:
 				shotID.append(burst)
 				imgCounts.append((np.mean(tmpImgCounts),np.std(tmpImgCounts)))
 		
-		# NOW SORT THE DATA
+		# NOW SORT THE DATA
 		if 'Shot' in shotID[0]:
 			# Shots
 			burstNums = []
@@ -886,7 +902,7 @@ class dataRun:
 				shotID.append(burst)
 				laserEnergy.append((np.mean(shotLaserEnergy),np.std(shotLaserEnergy)))
 		
-		# NOW SORT THE DATA
+		# NOW SORT THE DATA
 		if 'Shot' in shotID[0]:
 			# Shots
 			burstNums = []
@@ -918,6 +934,104 @@ class dataRun:
 		
 		return shotID_sorted,laserEnergy_sorted    
 
+	def loadPlasmaDensity(self, getShots=False,removeDuds=True):
+		# Retrieves the plasma density from the probe data.
+		# Note that only runs where the cell is >~ 1.8 mm can the
+		# density be extracted.
+
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+
+		diag = 'Probe_Interferometry'
+			
+		runDir = os.path.join(baseAnalysisFolder , diag,  runDate , runName)
+		bursts = [f for f in os.listdir(runDir) if not f.startswith('.')]
+		# Sort bursts here so the rest is ordered
+		bursts = sorted(bursts, key = lambda x: int(x.split('rst')[1]) )			
+			
+		if getShots:
+			shotID = []
+			Ne_lineout = []
+			for burst in bursts[:]:
+				burstDir = os.path.join(runDir,burst)
+				shots = [f for f in os.listdir(burstDir) if not f.startswith('.') and not f.startswith('Probe_Interferometry_Analysis.npy') ]
+				# Sort shots here so the rest is ordered
+				shots = sorted(shots, key = lambda x: int(x.split('Analysis')[1].split(".")[0]) )	
+				burstAverage = []
+				xAxis = []        
+				for shot in shots[:]:
+					shotName = 'Shot' +shot.split('Probe_Interferometry_Analysis')[1].split('.')[0]
+					shotPath = os.path.join(burstDir,shot)
+					print ("loading", burst+shotName)
+
+					data = np.load(shotPath, allow_pickle = True)
+					try:
+						cell = 1
+						_, l = data[cell]
+						if np.sum(l[:,1]) < 0:
+							# Return positive values
+							l[:,1] *= -1
+					except:
+						l = []
+
+					# shotID = 'Burst1Shot1'
+					shotID.append((burst+shotName))
+					print (burst+shotName, shotID)
+					Ne_lineout.append( l )
+
+		else:
+			shotID = []
+			Ne_lineout = []
+			for burst in bursts[:]:
+				print ("loading", burst)
+				burstDir = os.path.join(runDir,burst)
+				shots = [f for f in os.listdir(burstDir) if not f.startswith('.') and not f.startswith('Probe_Interferometry_Analysis.npy') ]
+				# Sort shots here so the rest is ordered
+				print (shots)
+				shots = sorted(shots, key = lambda x: int(x.split('Analysis')[1].split(".")[0]) )	
+				burstAverage = []
+				xAxis = []        
+				for shot in shots[:]:
+					shotPath = os.path.join(burstDir,shot)
+					# print (shotPath)
+					# shotID = 'Burst1'
+					
+					data = np.load(shotPath, allow_pickle = True)
+					try:
+						cell = 1
+
+						arr, l = data[cell]
+						if np.sum(l[:,1]) < 0:
+							# Return positive values
+							l[:,1] *= -1                
+						burstAverage.append(l[:,1])
+						# print (l[:,0][0], l[:,0][-1], len(l[:,0]) )
+						if len(l[:,0])> len(xAxis):
+							xAxis = l[:,0]
+					except:
+						pass
+					
+				# Make all the arrays the same size
+				endIndex = 100000000
+				for l in burstAverage:
+					if endIndex > len(l):
+						endIndex = len(l)                
+				sameSizeArr = []
+				for l in burstAverage:
+					sameSizeArr.append(l[:endIndex])
+				xAxis = xAxis[:endIndex]
+					
+				# Average the array
+				lout = np.average(sameSizeArr, axis = 0)    
+				shotID.append((burst))
+				# print (burst, shotID)
+				Ne_lineout.append( np.c_[xAxis, lout] )              
+
+		print (shotID, np.shape(Ne_lineout))
+		return shotID, Ne_lineout
+########			
+			
 
 	def loadAnalysedSpecPhase(self, getShots=False,removeDuds=True):
 		# Retrieves the spectral phase from the spider
@@ -1304,10 +1418,10 @@ class dataRun:
 			return shotID_sorted, z4_sorted
 
 	def appendDataToLists(self, data, lists):
-	    assert len(data) == len(lists)
-	    for d, l in zip(data, lists):
-	        l.append(d)
-	    return lists			
+		assert len(data) == len(lists)
+		for d, l in zip(data, lists):
+			l.append(d)
+		return lists			
 
 	def loadAnalysedESpec(self,getShots=True):
 		''' Retrieves the Analysed ESpec data
@@ -1405,9 +1519,29 @@ class dataRun:
 								 shot_cutoffEnergy95, shot_imagedEDdOmega] 
 					ave = self.appendDataToLists(dataLists, ave)
 				aveEaxis, aveSpec1D, aveSpec2D, aveDiv, aveCharge, aveTotE, aveCutE95, aveImdEdw = ave
-				# Is the energy axis always the same?
-				for i in range(1, len (aveEaxis)):
-					assert (aveEaxis[0] == aveEaxis[i]).all(), 'Energy axis is change\nWill have to do something like interpolation to solve this'
+				# #    # Is the energy axis always the same?
+				# for i in range(1, len (aveEaxis)):
+				#     print(i, (aveEaxis[0] == aveEaxis[i]).all())
+				#     # assert (aveEaxis[0] == aveEaxis[i]).all(), 'Energy axis is change\nWill have to do something like interpolation to solve this'
+					
+				# Working out how to join energy axes
+				arrE = np.array(aveEaxis)
+				uniqueEnergy =  np.unique(aveEaxis, axis = 0)    
+				numberOfEnergyAxes, _ = uniqueEnergy.shape        
+				
+				print (numberOfEnergyAxes)  
+				if numberOfEnergyAxes > 1:
+					from scipy.interpolate import interp1d
+					print ("the energy axis is changing in this burst")
+					newEAxis = np.linspace(arrE[:,0].max(), arrE[:,-1].min(), num = len(arrE))
+					newSpec = []
+					for i, _ in enumerate(aveSpec1D):
+						f = interp1d(aveEaxis[i], aveSpec1D[i], kind = 'cubic')
+						newSpec.append( f(newEAxis))
+					burst_spec1D = newSpec
+					burst_Eaxis = newEAxis 
+				else:
+					burst_Eaxis = aveEaxis[0]
 					
 				# Create averages per burst
 				burst_Eaxis  = np.average(aveEaxis, axis = 0 )
