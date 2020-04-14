@@ -1349,7 +1349,8 @@ class dataRun:
 
 		return shotID_sorted, gasLength_sorted		
 
-	def loadHASOFocusData(self, fileOption_0_1 = 1,getShots=False,returnFocusShift=False):
+	def loadHASOFocusData(self, fileOption_0_1 = 1,getShots=False,returnFocusShift=False,
+						returnFocusOnly = True):
 		# Perhaps here we want not only to load burst, but individual shots
 		# We need to get adapt the earlier HASOAnalysis function above to do this.
 
@@ -1366,15 +1367,27 @@ class dataRun:
 		bursts = [f for f in os.listdir(runDir) if not f.startswith('.')]
 		
 		if getShots:
-			z4 = []
+			z_poly_data = []
 			shotID = []
 			for burst in bursts:
 				shots = glob.glob(os.path.join(runDir,burst,'Shot*'))
 				for shot in shots:
-					zernikes = np.load(shot,allow_pickle=True)
-					z4.append(zernikes[-1]) #This looks like a mistake!
-					z4.append(zernikes[4])# CIDU this wasn't a mistake! The last data is the zernlike polys, which is what we want to look at...
-					# index 4 returns pupil information.
+					hasoData = np.load(shot,allow_pickle=True)
+					# If using calibratedWavefront then return the focus term
+					# if using the waveFrontOnLeakage return the list of zernlike polys
+					if fileOption_0_1 == 0:
+						if returnFocusOnly:
+							focusTerm = hasoData[4]
+							z_poly_data.append(focusTerm)
+						else:
+							z_poly_data.append(hasoData)
+					if fileOption_0_1 == 1:
+						zernikes = hasoData[-1]
+						if returnFocusOnly:
+							focusTerm = zernikes[4]
+							z_poly_data.append(focusTerm)
+						else:
+							z_poly_data.append(zernikes)						
 					shotName = shot.split('\\')[-1]
 					for elem in shotName.replace('.','_').split('_'):
 						if 'Shot' in elem:
@@ -1387,14 +1400,26 @@ class dataRun:
 
 			# TO DO
 
-			z4 = []
+			z_poly_data = []
 			shotID = []
 			for burst in bursts:
 				filename = os.path.join(runDir,burst, fileName)
-				zernikes  = np.load(filename, allow_pickle = True)
-				z4.append(zernikes[-1]) #This looks like a mistake!
-				# z4.append(zernikes[4])# CIDU this wasn't a mistake! The last data is the zernlike polys, which is what we want to look at...
-				# index 4 returns pupil information.
+				hasoData  = np.load(filename, allow_pickle = True)
+				# If using calibratedWavefront then return the focus term
+				# if using the waveFrontOnLeakage first return the list of zernlike polys
+				if fileOption_0_1 == 0:
+					if returnFocusOnly:
+						focusTerm = hasoData[4]
+						z_poly_data.append(focusTerm)
+					else:
+						z_poly_data.append(hasoData)
+				if fileOption_0_1 == 1:
+					zernikes = hasoData[-1]
+					if returnFocusOnly:
+						focusTerm = zernikes[4]
+						z_poly_data.append(focusTerm)
+					else:
+						z_poly_data.append(zernikes)
 				shotID.append(burst)
 		
 
@@ -1417,22 +1442,26 @@ class dataRun:
 				orderVal.append((burstNums[i]-1)*maxShotsInBurst+shotNums[i])
 			indxOrder = np.argsort(orderVal)
 			shotID_sorted = np.asarray(shotID)[indxOrder]
-			z4_sorted = np.asarray(z4)[indxOrder]
+			z_poly_data_sorted = np.asarray(z_poly_data)[indxOrder]
 		else:
 			burstNums = []
 			for burst in shotID:
 				burstNums.append(int(burst[5:]))
 			indxOrder = np.argsort(burstNums)
 			shotID_sorted = np.asarray(shotID)[indxOrder]
-			z4_sorted = np.asarray(z4)[indxOrder] 
+			z_poly_data_sorted = np.asarray(z_poly_data)[indxOrder] 
 
 		if returnFocusShift:
 			a4_to_RealSpace = 0.001169   # 1.169 mm per measured focal term
 			direction = -1				# From Matts email "More z3 focuses harder" so, more focal term beings focus negative, towards parabola
-			focusShift = direction*z4_sorted*a4_to_RealSpace
-			return shotID_sorted, z4_sorted , focusShift
+			if returnFocusOnly:
+				focusShift = direction*z_poly_data_sorted*a4_to_RealSpace
+			else:
+				# CIDU this needs checking
+				focusShift = direction*z_poly_data_sorted[:,4]*a4_to_RealSpace
+			return shotID_sorted, z_poly_data_sorted , focusShift
 		else:
-			return shotID_sorted, z4_sorted
+			return shotID_sorted, z_poly_data_sorted
 
 	def appendDataToLists(self, data, lists):
 		assert len(data) == len(lists)
@@ -1546,7 +1575,7 @@ class dataRun:
 				uniqueEnergy =  np.unique(aveEaxis, axis = 0)    
 				numberOfEnergyAxes, _ = uniqueEnergy.shape        
 				
-				print (numberOfEnergyAxes)  
+				# print (numberOfEnergyAxes)  
 				if numberOfEnergyAxes > 1:
 					from scipy.interpolate import interp1d
 					print ("the energy axis is changing in this burst")
