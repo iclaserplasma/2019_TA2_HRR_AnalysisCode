@@ -934,10 +934,13 @@ class dataRun:
 		
 		return shotID_sorted,laserEnergy_sorted    
 
-	def loadPlasmaDensity(self, getShots=False,removeDuds=True):
+	def loadPlasmaDensity_lineout(self, getShots=False, #removeDuds=True,
+						  verbose = False):
 		# Retrieves the plasma density from the probe data.
 		# Note that only runs where the cell is >~ 1.8 mm can the
 		# density be extracted.
+		# If you find some data where the cell is long enough and a calibration has not been created,
+		# please contact CIDU: christopher.underwood@york.ac.uk
 
 		baseAnalysisFolder = self.baseAnalysisFolder
 		runDate = self.runDate
@@ -963,7 +966,7 @@ class dataRun:
 				for shot in shots[:]:
 					shotName = 'Shot' +shot.split('Probe_Interferometry_Analysis')[1].split('.')[0]
 					shotPath = os.path.join(burstDir,shot)
-					print ("loading", burst+shotName)
+					if verbose: print ("loading", burst+shotName)
 
 					data = np.load(shotPath, allow_pickle = True)
 					try:
@@ -977,18 +980,18 @@ class dataRun:
 
 					# shotID = 'Burst1Shot1'
 					shotID.append((burst+shotName))
-					print (burst+shotName, shotID)
+					if verbose: print (burst+shotName, shotID)
 					Ne_lineout.append( l )
 
 		else:
 			shotID = []
 			Ne_lineout = []
 			for burst in bursts[:]:
-				print ("loading", burst)
+				if verbose: print ("loading", burst)
 				burstDir = os.path.join(runDir,burst)
 				shots = [f for f in os.listdir(burstDir) if not f.startswith('.') and not f.startswith('Probe_Interferometry_Analysis.npy') ]
 				# Sort shots here so the rest is ordered
-				print (shots)
+				if verbose: print (shots)
 				shots = sorted(shots, key = lambda x: int(x.split('Analysis')[1].split(".")[0]) )	
 				burstAverage = []
 				xAxis = []        
@@ -1028,9 +1031,21 @@ class dataRun:
 				# print (burst, shotID)
 				Ne_lineout.append( np.c_[xAxis, lout] )              
 
-		print (shotID, np.shape(Ne_lineout))
-		return shotID, Ne_lineout
-########			
+		if verbose: print (shotID, np.shape(Ne_lineout))
+		return np.array(shotID), np.array(Ne_lineout)
+
+	def loadAveragedPlasmaDensity(self, getShots=False):
+		shotID, Ne_lineout = self.loadPlasmaDensity_lineout(getShots=getShots)
+		ne_per_shot = []
+		ne_err_shot = []
+		for shot in Ne_lineout:
+			ne = np.average( np.array(shot)[:,1])
+			ne_err = np.std( np.array(shot)[:,1])
+			ne_per_shot.append(ne)
+			ne_err_shot.append(ne_err)
+		return shotID, np.array(ne_per_shot), np.array(ne_err_shot)
+
+
 			
 
 	def loadAnalysedSpecPhase(self, getShots=False,removeDuds=True):
@@ -1357,7 +1372,9 @@ class dataRun:
 				shots = glob.glob(os.path.join(runDir,burst,'Shot*'))
 				for shot in shots:
 					zernikes = np.load(shot,allow_pickle=True)
-					z4.append(zernikes[4])
+					z4.append(zernikes[-1]) #This looks like a mistake!
+					z4.append(zernikes[4])# CIDU this wasn't a mistake! The last data is the zernlike polys, which is what we want to look at...
+					# index 4 returns pupil information.
 					shotName = shot.split('\\')[-1]
 					for elem in shotName.replace('.','_').split('_'):
 						if 'Shot' in elem:
@@ -1375,9 +1392,9 @@ class dataRun:
 			for burst in bursts:
 				filename = os.path.join(runDir,burst, fileName)
 				zernikes  = np.load(filename, allow_pickle = True)
-
-				# z4.append(zernikes[-1]) This looks like a mistake!
-				z4.append(zernikes[4])
+				z4.append(zernikes[-1]) #This looks like a mistake!
+				# z4.append(zernikes[4])# CIDU this wasn't a mistake! The last data is the zernlike polys, which is what we want to look at...
+				# index 4 returns pupil information.
 				shotID.append(burst)
 		
 
