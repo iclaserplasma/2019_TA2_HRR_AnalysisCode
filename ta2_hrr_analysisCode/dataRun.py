@@ -490,7 +490,7 @@ class dataRun:
 				
 			else:
 				analysedData = XRayAnalysis.XRayEcrit(filePathDict[burstStr],xrayCalib)
-				analysisSavePath = os.path.join(analysisPath,burstStr,'XRayAnalysis')
+				analysisSavePath = os.path.join(analysisPath,burstStr,'XRayAnalysis_A60W')
 				self.saveData(analysisSavePath,analysedData)
 				self.logThatShit('Performed XRay Analysis for ' + burstStr)
 				print('Performed XRay Analysis for ' + burstStr )
