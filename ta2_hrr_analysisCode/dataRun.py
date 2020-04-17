@@ -278,6 +278,16 @@ class dataRun:
 			shotID = fileName.split('.')[0]
 		return shotID
 
+	def shotName_from_filepath(self, fileName, start = None, end = None):
+		if "\\" in fileName:
+			shotName = fileName.split('\\')[-1][start:end]
+		elif "/" in fileName:
+			shotName = fileName.split('/')[-1][start:end]
+		else:
+			print ("Neither folder indicator found in filepath")
+			shotName = fileName[start:end]
+		return shotName
+
 
 	# -------------------------------------------------------------------------------------------------------------------
 	# -----										DIAGNOSTIC FUNCTION CALLS 											-----
@@ -506,12 +516,13 @@ class dataRun:
 			xrayCalib = self.loadCalibrationData(diag)
 
 		for burstStr in filePathDict.keys():
+			print (burstStr)
 			if justGetCounts:
 				# Here we're going to avoid all actual x-ray code and just sum the image counts
 				# Not even using a background. This is to mimic what happened during optimization
 				for filePath in filePathDict[burstStr]:	
 					imgCounts = np.sum(plt.imread(filePath).astype(float))
-					shotName = filePath.split('\\')[-1][:-4]
+					shotName = self.shotName_from_filepath(filePath, end = -4) # CIDU added function to read both file path types.
 					analysisSavePath = os.path.join(analysisPath,burstStr,'XRayImgCounts_'+shotName)
 					self.saveData(analysisSavePath,imgCounts)
 					self.logThatShit('Saved counts for ' + burstStr + ' ' + shotName)
@@ -1388,7 +1399,7 @@ class dataRun:
 							z_poly_data.append(focusTerm)
 						else:
 							z_poly_data.append(zernikes)						
-					shotName = shot.split('\\')[-1]
+					shotName = self.shotName_from_filepath(shot) # shot.split('\\')[-1] # CIDU updating to work on both OS.
 					for elem in shotName.replace('.','_').split('_'):
 						if 'Shot' in elem:
 							shotName = elem
