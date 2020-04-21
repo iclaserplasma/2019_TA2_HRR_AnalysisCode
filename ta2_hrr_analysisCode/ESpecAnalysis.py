@@ -125,7 +125,7 @@ def analyseImage(rawImage, calibrationTuple):
     Spectrum - spectra in the similar style as energy [Spectrum average, [Spectrum top, Spectrum bottom]]
     Divergence - divergence of the beam in mrad [divergence, standard error of the divergence]
     Charge - charge of the electron beam in fC [charge, standard error of the charge]
-    totalEnergy - integrated energy of the electron beam in J [average energy, [upper limit, lower limit]]
+    totalEnergy - integrated energy of the electron beam in nJ -> multiply by 1e-6 for mJ [average energy, [upper limit, lower limit]]
     cutOffEnergy95 - cut off energy at 95% charge of the electron beam in MeV, [upper limit, lower limit]]
     imagedEdOmega - this is the warped image without background in fC / MeV / mrad, which is the first output argument divided by
         the energy width per pixel and divided by the steradiant per pixel (latter the width of the pixel / propagation length)
