@@ -51,7 +51,22 @@ def readSPIDER_spectral_profile_FULL(path):
             return d[:,0], d[:,1], d[:,2]
     # If it hasn't found the data return arrays of zero
     return np.zeros(10)
+
+def readSPIDER_temporal_profile_FULL(path):
     
+    z = zipfile.ZipFile(path)
+    for filename in z.namelist():
+        if 'time.dat' in filename:
+            d = []
+            for i, line in enumerate(z.open(filename)):
+                 if not i == 0:
+                     # The data is in binary, so we need to decode it to append to arrays
+                     d.append([ float(line.split(b"\t")[0].decode()), float(line.split(b"\t")[2].decode()),float(line.split(b"\t")[3].decode())])
+            d = np.array(d)
+            return d[:,0], d[:,1], d[:,2]
+    # If it hasn't found the data return arrays of zero
+    return np.zeros(10)
+
 def readSPIDER_values(path):
     z = zipfile.ZipFile(path)
     for filename in z.namelist():
