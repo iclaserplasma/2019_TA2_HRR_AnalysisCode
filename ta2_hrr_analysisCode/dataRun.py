@@ -1035,9 +1035,9 @@ class dataRun:
 					indxs = np.argwhere(np.abs(t)>400) # places further than 400 fs from the middle
 					testSum = np.sum(I[indxs])
 					if testSum < 1 or removeDuds is False:
-						tmpGDD.append(specPhaseOrders[0])
-						tmpTOD.append(specPhaseOrders[1])
-						tmpFOD.append(specPhaseOrders[2])
+						tmpGDD.append(float(specPhaseOrders[0]))
+						tmpTOD.append(float(specPhaseOrders[1]))
+						tmpFOD.append(float(specPhaseOrders[2]))
 						
 				shotID.append(burst)        
 				GDD.append((np.mean(tmpGDD),np.std(tmpGDD)))
