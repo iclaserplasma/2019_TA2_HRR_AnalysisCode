@@ -1472,6 +1472,13 @@ class dataRun:
 		else:
 			return shotID_sorted, z4_sorted
 
+	def appendDataToLists(self, data, lists):
+		assert len(data) == len(lists)
+		for d, l in zip(data, lists):
+			l.append(d)
+		return lists	
+
+
 	def loadAnalysedESpec(self,getShots=True, load2DImages = True):
 		''' Retrieves the Analysed ESpec data
 
