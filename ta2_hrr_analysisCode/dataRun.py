@@ -1030,7 +1030,8 @@ class dataRun:
 				endIndex = 100000000
 				for l in burstAverage:
 					if endIndex > len(l):
-						endIndex = len(l)                
+						endIndex = len(l)          
+				print (endIndex)
 				sameSizeArr = []
 				for l in burstAverage:
 					sameSizeArr.append(l[:endIndex])
@@ -1040,6 +1041,8 @@ class dataRun:
 				lout = np.average(sameSizeArr, axis = 0)    
 				shotID.append((burst))
 				# print (burst, shotID)
+				print (np.shape(xAxis), np.shape(lout))
+				
 				Ne_lineout.append( np.c_[xAxis, lout] )              
 
 		if verbose: print (shotID, np.shape(Ne_lineout))
@@ -1480,7 +1483,7 @@ class dataRun:
 			l.append(d)
 		return lists			
 
-	def loadAnalysedESpec(self,getShots=True):
+	def loadAnalysedESpec(self,getShots=True, load2DImages = True):
 		''' Retrieves the Analysed ESpec data
 
 		Each analysed image has data stored in the form 
@@ -1521,15 +1524,21 @@ class dataRun:
 							if 'Shot' in elem:
 								shotName = elem
 					shotID.append((burst+shotName))
-					Spectrum2D.append(loadedData[0])
 					Eaxis.append(loadedData[1][0]) # Pull out the main energy axis. Ignore errors for the moment
 					Spectrum1D.append(loadedData[2][0]) # Pull out the main spectrum. Ignore errors for the moment
 					Divergence.append(loadedData[3][0]) # Divergence only, no error
 					Charge.append(loadedData[4][0]) # charge no error
 					totalEnergy.append(loadedData[5][0]) # similar
 					cutoffEnergy95.append(loadedData[6][0]) # similar
-					imagedEDdOmega.append(loadedData[7])
-							
+					
+					# Loading all the 2D images on a burst can cause memory issues
+					# Keeping the arrays the same shape
+					if load2DImages:
+						Spectrum2D.append(loadedData[0])
+						imagedEDdOmega.append(loadedData[7])
+					else:
+						Spectrum2D.append([])
+						imagedEDdOmega.append([])							
 		else:			
 			Spectrum2D = []
 			Eaxis = []
@@ -1565,12 +1574,21 @@ class dataRun:
 					 # Pull out the main axis. Ignore errors for the moment
 					shot_EnergyAxis = loadedData[1][0]
 					shot_spectrum1D = loadedData[2][0]
-					shot_spectrum2D = loadedData[0]
+					
 					shot_divergence = loadedData[3][0]
 					shot_charge     = loadedData[4][0]
 					shot_totalEnergy    = loadedData[5][0]
 					shot_cutoffEnergy95 = loadedData[6][0]
-					shot_imagedEDdOmega = loadedData[7]
+					
+					# Loading all the 2D images on a burst can cause memory issues
+					# Keeping the arrays the same shape					
+					if load2DImages:
+						shot_spectrum2D = loadedData[0]
+						shot_imagedEDdOmega = loadedData[7]
+					else:
+						shot_spectrum2D = []
+						shot_imagedEDdOmega = []
+						
 					dataLists = [shot_EnergyAxis, shot_spectrum1D, shot_spectrum2D, 
 								 shot_divergence, shot_charge, shot_totalEnergy, 
 								 shot_cutoffEnergy95, shot_imagedEDdOmega] 
@@ -1603,21 +1621,28 @@ class dataRun:
 				# Create averages per burst
 				burst_Eaxis  = np.average(aveEaxis, axis = 0 )
 				burst_spec1D = np.average(aveSpec1D, axis = 0 )
-				burst_spec2D = np.average(aveSpec2D, axis = 0 )
+				if load2DImages:
+					burst_spec2D = np.average(aveSpec2D, axis = 0 )
+					burst_ImdEdw = np.average(aveImdEdw, axis = 0 )
+				else:
+					burst_spec2D = []
+					burst_ImdEdw = []
 				burst_div    = np.average(aveDiv,    axis = 0 )
 				burst_charge = np.average(aveCharge, axis = 0 )
 				burst_totE   = np.average(aveTotE,   axis = 0 )
 				burst_cutE95 = np.average(aveCutE95, axis = 0 )
-				burst_ImdEdw = np.average(aveImdEdw, axis = 0 )
 				
-				# burst_Eaxis_std  = np.std(aveEaxis, axis = 0 )
 				burst_spec1D_std = np.std(aveSpec1D, axis = 0 )
-				burst_spec2D_std = np.std(aveSpec2D, axis = 0 )
+				if load2DImages:
+					burst_spec2D_std = np.average(aveSpec2D, axis = 0 )
+					burst_ImdEdw_std = np.average(aveImdEdw, axis = 0 )
+				else:
+					burst_spec2D_std = []                
+					burst_ImdEdw_std = []                
 				burst_div_std    = np.std(aveDiv,    axis = 0 )
 				burst_charge_std = np.std(aveCharge, axis = 0 )
 				burst_totE_std   = np.std(aveTotE,   axis = 0 )
 				burst_cutE95_std = np.std(aveCutE95, axis = 0 )
-				burst_ImdEdw_std = np.std(aveImdEdw, axis = 0 )    
 				
 				# Append to the lists
 				shotID.append(burst)        
