@@ -278,16 +278,6 @@ class dataRun:
 			shotID = fileName.split('.')[0]
 		return shotID
 
-	def shotName_from_filepath(self, fileName, start = None, end = None):
-		if "\\" in fileName:
-			shotName = fileName.split('\\')[-1][start:end]
-		elif "/" in fileName:
-			shotName = fileName.split('/')[-1][start:end]
-		else:
-			print ("Neither folder indicator found in filepath")
-			shotName = fileName[start:end]
-		return shotName
-
 
 	# -------------------------------------------------------------------------------------------------------------------
 	# -----										DIAGNOSTIC FUNCTION CALLS 											-----
@@ -334,7 +324,7 @@ class dataRun:
 				print('Analysed Probe_Interferometry '+ burstStr)
 
 	# ELECTRON ANALYSIS 
-	def performESpecAnalysis(self,useCalibration=True, overwrite = False):
+	def performESpecAnalysis(self,useCalibration=True):
 		# Load the espec images for the run and analyse
 		# if it exists get it, if not, run initESpecAnalysis and update log
 		try:
@@ -355,35 +345,19 @@ class dataRun:
 			if useCalibration:
 				for shotFile in filePathDict[burstStr]:
 					shotID = self.shotID_from_filepath(shotFile)
+					analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile,eSpecCalib)
+					# Save the data
+					print (shotFile, shotID)
 					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_'+shotID)
-					fileExists = os.path.exists(analysisSavePath)
-					extract = True
-					if not overwrite:
-						if fileExists:
-							extract = False
-							print ("Data already extracted for ", burst, shotID)
-					if extract:
-						analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile,eSpecCalib)
-						# Save the data
-						print ('Saving:', shotFile, shotID)
-						self.saveData(analysisSavePath,analysedData)
+					self.saveData(analysisSavePath,analysedData)
 
 			else:
 				for shotFile in filePathDict[burstStr]:
 					shotID = self.shotID_from_filepath(shotFile)
+					analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile)
 					# Save the data
 					analysisSavePath = os.path.join(analysisPath,burstStr,'ESpecAnalysis_NoCalibration_'+shotID)
-					fileExists = os.path.exists(analysisSavePath)
-					extract = True
-					if not overwrite:
-						if fileExists:
-							extract = False
-							print ("Data already extracted for ", burst, shotID)
-					if extract:
-						analysedData = ESpecAnalysis.ESpecSCEC_individual(shotFile)
-						# Save the data
-						print ('Saving:', shotFile, shotID)
-						self.saveData(analysisSavePath,analysedData)
+					self.saveData(analysisSavePath,analysedData)
 			self.logThatShit('Performed HighESpec Analysis for ' + burstStr)
 			print('Analysed ESpec for '+ burstStr)
 
@@ -516,13 +490,12 @@ class dataRun:
 			xrayCalib = self.loadCalibrationData(diag)
 
 		for burstStr in filePathDict.keys():
-			print (burstStr)
 			if justGetCounts:
 				# Here we're going to avoid all actual x-ray code and just sum the image counts
 				# Not even using a background. This is to mimic what happened during optimization
 				for filePath in filePathDict[burstStr]:	
 					imgCounts = np.sum(plt.imread(filePath).astype(float))
-					shotName = self.shotName_from_filepath(filePath, end = -4) # CIDU added function to read both file path types.
+					shotName = filePath.split('\\')[-1][:-4]
 					analysisSavePath = os.path.join(analysisPath,burstStr,'XRayImgCounts_'+shotName)
 					self.saveData(analysisSavePath,imgCounts)
 					self.logThatShit('Saved counts for ' + burstStr + ' ' + shotName)
@@ -651,7 +624,7 @@ class dataRun:
 
 		# Find the first peak of the FFT that isn't the DC peak
 		peaks,properties = find_peaks(BFT)
-		sortedIndexs = np.argsort(BFT[peaks]) # sorts in ascending order
+		sortedIndexs = np.argsort(BFT[peaks]) # sorts in ascending order
 		sortedIndexs[-2:]
 		peaks = peaks[sortedIndexs[-2:]]
 		peak = np.amin(peaks)
@@ -755,19 +728,19 @@ class dataRun:
 		import pandas as pd
 
 		def db_index(db, dateRunString, diag):
-			# Located the region in the database that corresponds to the correct run and diagnostic
-			runCalFiles = db[db[' '] == dateRunString]
-			keys = db.keys().tolist()
+		    # Located the region in the database that corresponds to the correct run and diagnostic
+		    runCalFiles = db[db[' '] == dateRunString]
+		    keys = db.keys().tolist()
 		#     print (runCalFiles)
 			# Find the index of the run
-			inds = db.index[db[' '] == dateRunString].tolist()[0]
-			for i, k in enumerate(keys):
-				# Find the index of the diag (column)
-				if k == diag:
-					keyIndex = i
+		    inds = db.index[db[' '] == dateRunString].tolist()[0]
+		    for i, k in enumerate(keys):
+		    	# Find the index of the diag (column)
+		        if k == diag:
+		            keyIndex = i
 			# print ("Database Index")
 			# print(inds, keyIndex)		            
-			return inds, keyIndex
+		    return inds, keyIndex
 
 		db = pd.read_csv(calibrationPath)
 		inds, keyIndex = db_index(db, dateRunString, diag)
@@ -802,6 +775,61 @@ class dataRun:
 	# -------------------------------------------------------------------------------------------------------------------
 	# -----								LOADING ANALYSED DATA FUNCTION CALLS										-----
 	# -------------------------------------------------------------------------------------------------------------------
+
+	def load_Averaged_ESpecData(self):
+		# General function to pull in the electron spectrum data
+		# Each shot has 5 data points saved:
+		# WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+		diag='HighESpec'	
+
+		def returnAverageESpecPerBurst(data):
+			ave = []
+			std = []
+			
+			for i in range(np.shape(data)[1]):
+				try:
+					a = np.average( np.array(data[:,i]))
+					s = np.std(     np.array(data[:,i]))
+				except AttributeError:            
+					a = np.average( np.array(data[:,i], dtype = float))
+					s = np.std(     np.array(data[:,i], dtype = float))
+				ave.append( a )
+				std.append( s )
+			return ave, std
+	
+		eSpecCalib = self.loadCalibrationData(diag)
+		_, _, _ , E, dxoverdE, _, L, CutOff, _ = eSpecCalib
+		Energy = E[CutOff:]
+		# the following parameters will be cut only if they are intended to be used.
+		#    Length = L[:, CutOff:]
+		dxoverdE = dxoverdE[CutOff:]  # MIGHT BE WRONG		
+		calData = (Energy, dxoverdE, L)
+
+		print ("Loading the data from {}".format(diag))
+		analysedDataDir = os.path.join(baseAnalysisFolder,diag,runDate,runName)
+		bursts = [f for f in os.listdir(analysedDataDir) if not f.startswith('.')]
+		print (analysedDataDir, "\nBurst, Number of shots in burst")
+
+		runOutputEspec = {}
+		for burst in bursts:
+			analysedFiles = os.listdir(os.path.join(analysedDataDir,burst))
+			if 'ESpecAnalysis.npy' in analysedFiles:
+				filePath = os.path.join(analysedDataDir, burst, 'ESpecAnalysis.npy')
+				d = np.load( filePath, allow_pickle = True)
+				print (burst, len(d))
+
+				runOutputEspec[burst] = returnAverageESpecPerBurst(d)
+		BurstIDS = list(runOutputEspec)
+		eDataBurst = []
+		for burst in BurstIDS:
+			eDataBurst.append(runOutputEspec[burst])
+
+		# eDataBurst contains the average and the std of the burst data
+		return BurstIDS, eDataBurst, calData
+
 
 	def loadAnalysedXRayCountsData(self,getShots=False):
 		# General function to pull all of the XRay data from the analysis folder
@@ -839,7 +867,7 @@ class dataRun:
 				shotID.append(burst)
 				imgCounts.append((np.mean(tmpImgCounts),np.std(tmpImgCounts)))
 		
-		# NOW SORT THE DATA
+		# NOW SORT THE DATA
 		if 'Shot' in shotID[0]:
 			# Shots
 			burstNums = []
@@ -913,7 +941,7 @@ class dataRun:
 				shotID.append(burst)
 				laserEnergy.append((np.mean(shotLaserEnergy),np.std(shotLaserEnergy)))
 		
-		# NOW SORT THE DATA
+		# NOW SORT THE DATA
 		if 'Shot' in shotID[0]:
 			# Shots
 			burstNums = []
@@ -1060,8 +1088,6 @@ class dataRun:
 		return shotID, np.array(ne_per_shot), np.array(ne_err_shot)
 
 
-			
-
 	def loadAnalysedSpecPhase(self, getShots=False,removeDuds=True):
 		# Retrieves the spectral phase from the spider
 
@@ -1123,9 +1149,9 @@ class dataRun:
 					indxs = np.argwhere(np.abs(t)>400) # places further than 400 fs from the middle
 					testSum = np.sum(I[indxs])
 					if testSum < 1 or removeDuds is False:
-						tmpGDD.append(specPhaseOrders[0])
-						tmpTOD.append(specPhaseOrders[1])
-						tmpFOD.append(specPhaseOrders[2])
+						tmpGDD.append(float(specPhaseOrders[0]))
+						tmpTOD.append(float(specPhaseOrders[1]))
+						tmpFOD.append(float(specPhaseOrders[2]))
 						
 				shotID.append(burst)        
 				GDD.append((np.mean(tmpGDD),np.std(tmpGDD)))
@@ -1363,8 +1389,7 @@ class dataRun:
 
 		return shotID_sorted, gasLength_sorted		
 
-	def loadHASOFocusData(self, fileOption_0_1 = 1,getShots=False,returnFocusShift=False,
-						returnFocusOnly = True):
+	def loadHASOFocusData(self, fileOption_0_1 = 1,getShots=False,returnFocusShift=False):
 		# Perhaps here we want not only to load burst, but individual shots
 		# We need to get adapt the earlier HASOAnalysis function above to do this.
 
@@ -1381,28 +1406,14 @@ class dataRun:
 		bursts = [f for f in os.listdir(runDir) if not f.startswith('.')]
 		
 		if getShots:
-			z_poly_data = []
+			z4 = []
 			shotID = []
 			for burst in bursts:
 				shots = glob.glob(os.path.join(runDir,burst,'Shot*'))
 				for shot in shots:
-					hasoData = np.load(shot,allow_pickle=True)
-					# If using calibratedWavefront then return the focus term
-					# if using the waveFrontOnLeakage return the list of zernlike polys
-					if fileOption_0_1 == 0:
-						if returnFocusOnly:
-							focusTerm = hasoData[4]
-							z_poly_data.append(focusTerm)
-						else:
-							z_poly_data.append(hasoData)
-					if fileOption_0_1 == 1:
-						zernikes = hasoData[-1]
-						if returnFocusOnly:
-							focusTerm = zernikes[4]
-							z_poly_data.append(focusTerm)
-						else:
-							z_poly_data.append(zernikes)						
-					shotName = self.shotName_from_filepath(shot) # shot.split('\\')[-1] # CIDU updating to work on both OS.
+					zernikes = np.load(shot,allow_pickle=True)
+					z4.append(zernikes[4])
+					shotName = shot.split('\\')[-1]
 					for elem in shotName.replace('.','_').split('_'):
 						if 'Shot' in elem:
 							shotName = elem
@@ -1414,26 +1425,14 @@ class dataRun:
 
 			# TO DO
 
-			z_poly_data = []
+			z4 = []
 			shotID = []
 			for burst in bursts:
 				filename = os.path.join(runDir,burst, fileName)
-				hasoData  = np.load(filename, allow_pickle = True)
-				# If using calibratedWavefront then return the focus term
-				# if using the waveFrontOnLeakage first return the list of zernlike polys
-				if fileOption_0_1 == 0:
-					if returnFocusOnly:
-						focusTerm = hasoData[4]
-						z_poly_data.append(focusTerm)
-					else:
-						z_poly_data.append(hasoData)
-				if fileOption_0_1 == 1:
-					zernikes = hasoData[-1]
-					if returnFocusOnly:
-						focusTerm = zernikes[4]
-						z_poly_data.append(focusTerm)
-					else:
-						z_poly_data.append(zernikes)
+				zernikes  = np.load(filename, allow_pickle = True)
+
+				# z4.append(zernikes[-1]) This looks like a mistake!
+				z4.append(zernikes[4])
 				shotID.append(burst)
 		
 
@@ -1456,32 +1455,22 @@ class dataRun:
 				orderVal.append((burstNums[i]-1)*maxShotsInBurst+shotNums[i])
 			indxOrder = np.argsort(orderVal)
 			shotID_sorted = np.asarray(shotID)[indxOrder]
-			z_poly_data_sorted = np.asarray(z_poly_data)[indxOrder]
+			z4_sorted = np.asarray(z4)[indxOrder]
 		else:
 			burstNums = []
 			for burst in shotID:
 				burstNums.append(int(burst[5:]))
 			indxOrder = np.argsort(burstNums)
 			shotID_sorted = np.asarray(shotID)[indxOrder]
-			z_poly_data_sorted = np.asarray(z_poly_data)[indxOrder] 
+			z4_sorted = np.asarray(z4)[indxOrder] 
 
 		if returnFocusShift:
 			a4_to_RealSpace = 0.001169   # 1.169 mm per measured focal term
 			direction = -1				# From Matts email "More z3 focuses harder" so, more focal term beings focus negative, towards parabola
-			if returnFocusOnly:
-				focusShift = direction*z_poly_data_sorted*a4_to_RealSpace
-			else:
-				# CIDU this needs checking
-				focusShift = direction*z_poly_data_sorted[:,4]*a4_to_RealSpace
-			return shotID_sorted, z_poly_data_sorted , focusShift
+			focusShift = direction*z4_sorted*a4_to_RealSpace
+			return shotID_sorted, z4_sorted , focusShift
 		else:
-			return shotID_sorted, z_poly_data_sorted
-
-	def appendDataToLists(self, data, lists):
-		assert len(data) == len(lists)
-		for d, l in zip(data, lists):
-			l.append(d)
-		return lists			
+			return shotID_sorted, z4_sorted
 
 	def loadAnalysedESpec(self,getShots=True, load2DImages = True):
 		''' Retrieves the Analysed ESpec data
@@ -1489,7 +1478,8 @@ class dataRun:
 		Each analysed image has data stored in the form 
 		WarpedImageWithoutBckgnd, Spectrum, Charge, totalEnergy, cutoffEnergy95,
 
-		NOTE: getShots = False is now working CIDU
+		NOTE: getShots = False, does not work...need to use getShots=True
+		NOTE: getShots = False is now working CIDU	
 		'''
 		
 		baseAnalysisFolder = self.baseAnalysisFolder
@@ -1523,6 +1513,7 @@ class dataRun:
 					for elem in shot.replace('.','_').split('_'):
 							if 'Shot' in elem:
 								shotName = elem
+					# WarpedImageWithoutBckgnd, E, Spectrum, Divergence, Charge, totalEnergy, cutOffEnergy95, imagedEdOmega
 					shotID.append((burst+shotName))
 					Eaxis.append(loadedData[1][0]) # Pull out the main energy axis. Ignore errors for the moment
 					Spectrum1D.append(loadedData[2][0]) # Pull out the main spectrum. Ignore errors for the moment
@@ -1530,7 +1521,7 @@ class dataRun:
 					Charge.append(loadedData[4][0]) # charge no error
 					totalEnergy.append(loadedData[5][0]) # similar
 					cutoffEnergy95.append(loadedData[6][0]) # similar
-					
+
 					# Loading all the 2D images on a burst can cause memory issues
 					# Keeping the arrays the same shape
 					if load2DImages:
@@ -1538,8 +1529,9 @@ class dataRun:
 						imagedEDdOmega.append(loadedData[7])
 					else:
 						Spectrum2D.append([])
-						imagedEDdOmega.append([])							
-		else:			
+						imagedEDdOmega.append([])														
+		else:
+			# CIDU updated
 			Spectrum2D = []
 			Eaxis = []
 			Spectrum1D = []
@@ -1654,10 +1646,11 @@ class dataRun:
 				totalEnergy.append(    [burst_totE  , burst_totE_std  ] )
 				cutoffEnergy95.append( [burst_cutE95, burst_cutE95_std] )
 				imagedEDdOmega.append( [burst_ImdEdw, burst_ImdEdw_std] )
+		# Finished extracting data.
 
 		# Sorting the data to be in the correct order
 		if 'Shot' in shotID[0]:
-			# Shots
+			# This is the option when getShots = True
 			burstNums = []
 			shotNums = []
 			for burstShot in shotID:
@@ -1685,7 +1678,7 @@ class dataRun:
 			imagedEDdOmega_sorted = np.asarray(imagedEDdOmega)[indxOrder] 
 
 		else:
-			# bursts
+			# This is the option when getShots = False, bursts
 			burstNums = []
 			for burst in shotID:
 				burstNums.append(int(burst[5:]))
@@ -1700,8 +1693,7 @@ class dataRun:
 			cutoffEnergy95_sorted = np.asarray(cutoffEnergy95)[indxOrder] 
 			imagedEDdOmega_sorted = np.asarray(imagedEDdOmega)[indxOrder] 
 
-		# WarpedImageWithoutBckgnd, E, Spectrum, Divergence, Charge, totalEnergy, cutOffEnergy95
-		return shotID_sorted , Eaxis_sorted, Spectrum2D_sorted, Spectrum1D_sorted, Divergence_sorted,Charge_sorted,totalEnergy_sorted,cutoffEnergy95_sorted,imagedEDdOmega_sorted
+			return shotID_sorted , Eaxis_sorted, Spectrum2D_sorted, Spectrum1D_sorted, Divergence_sorted,Charge_sorted,totalEnergy_sorted,cutoffEnergy95_sorted,imagedEDdOmega_sorted
 		
 
 
