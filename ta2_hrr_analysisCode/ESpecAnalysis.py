@@ -138,8 +138,8 @@ def analyseImage(rawImage, calibrationTuple):
     #    Length = L[:, CutOff:]
 
     # here hard coded: the analysis of the image plates yield to a count to fC calibration of:
-    fCperCounts = 2.7e-3
-    fCperCountsSigma = 6.5e-4
+    fCperCounts = 2.4e-3
+    fCperCountsSigma = 4.8e-4
 
     # now to the analysis:
     image = rawImage.astype(float)
