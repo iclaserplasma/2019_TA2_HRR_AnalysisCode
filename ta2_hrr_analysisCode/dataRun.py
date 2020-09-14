@@ -1409,8 +1409,13 @@ class dataRun:
 		if getShots:
 			z4 = []
 			shotID = []
+			z_poly_data = []
 			for burst in bursts:
+				# I think the comment below was from Chris, but it broke the code. Sorry, but I have to remove the "hack" for now
 				shots = glob.glob(os.path.join(runDir,burst,'Shot*'))
+				burstDir = os.path.join(runDir,burst)
+				OnlyShots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
+				TrackerID = 0
 				for shot in shots:
 					hasoData = np.load(shot,allow_pickle=True)
 					# If using calibratedWavefront then return the focus term
@@ -1428,11 +1433,13 @@ class dataRun:
 							z_poly_data.append(focusTerm)
 						else:
 							z_poly_data.append(zernikes)						
-					shotName = self.shotName_from_filepath(shot) # shot.split('\\')[-1] # CIDU updating to work on both OS.
-					for elem in shotName.replace('.','_').split('_'):
+					# I think the comment below was from Chris, but it broke the code. Sorry, but I have to remove the "hack" for now
+					# shotName = self.shotName_from_filepath(shot) # shot.split('\\')[-1] # CIDU updating to work on both OS.
+					for elem in OnlyShots[TrackerID].replace('.','_').split('_'):
 						if 'Shot' in elem:
 							shotName = elem
 					shotID.append((burst+shotName))
+					TrackerID += 1
 
 		else:
 			# Should be a condition here to check if individual shot data exists,
@@ -1475,6 +1482,7 @@ class dataRun:
 				
 				burstNums.append(int(burst[5:]))
 				shotNums.append(int(shot[4:]))
+
 			orderVal = []
 			maxShotsInBurst = np.amax(shotNums)
 			for i in range(len(burstNums)):
@@ -1519,7 +1527,6 @@ class dataRun:
 		NOTE: getShots = False, does not work...need to use getShots=True
 		NOTE: getShots = False is now working CIDU	
 		'''
-		
 		baseAnalysisFolder = self.baseAnalysisFolder
 		runDate = self.runDate
 		runName = self.runName
@@ -1567,7 +1574,7 @@ class dataRun:
 						imagedEDdOmega.append(loadedData[7])
 					else:
 						Spectrum2D.append([])
-						imagedEDdOmega.append([])														
+						imagedEDdOmega.append([])													
 		else:
 			# CIDU updated
 			Spectrum2D = []
@@ -1685,7 +1692,6 @@ class dataRun:
 				cutoffEnergy95.append( [burst_cutE95, burst_cutE95_std] )
 				imagedEDdOmega.append( [burst_ImdEdw, burst_ImdEdw_std] )
 		# Finished extracting data.
-
 		# Sorting the data to be in the correct order
 		if 'Shot' in shotID[0]:
 			# This is the option when getShots = True
@@ -1697,9 +1703,9 @@ class dataRun:
 				tmpSpl[1] = 'S'+tmpSpl[1]
 				burst = tmpSpl[0]
 				shot = tmpSpl[1]
-
 				burstNums.append(int(burst[5:]))
 				shotNums.append(int(shot[4:]))
+
 			orderVal = []
 			maxShotsInBurst = np.amax(shotNums)
 			for i in range(len(burstNums)):
@@ -1714,7 +1720,6 @@ class dataRun:
 			totalEnergy_sorted = np.asarray(totalEnergy)[indxOrder] 
 			cutoffEnergy95_sorted = np.asarray(cutoffEnergy95)[indxOrder] 
 			imagedEDdOmega_sorted = np.asarray(imagedEDdOmega)[indxOrder] 
-
 		else:
 			# This is the option when getShots = False, bursts
 			burstNums = []
@@ -1731,7 +1736,7 @@ class dataRun:
 			cutoffEnergy95_sorted = np.asarray(cutoffEnergy95)[indxOrder] 
 			imagedEDdOmega_sorted = np.asarray(imagedEDdOmega)[indxOrder] 
 
-			return shotID_sorted , Eaxis_sorted, Spectrum2D_sorted, Spectrum1D_sorted, Divergence_sorted,Charge_sorted,totalEnergy_sorted,cutoffEnergy95_sorted,imagedEDdOmega_sorted
+		return shotID_sorted , Eaxis_sorted, Spectrum2D_sorted, Spectrum1D_sorted, Divergence_sorted,Charge_sorted,totalEnergy_sorted,cutoffEnergy95_sorted,imagedEDdOmega_sorted
 		
 
 
