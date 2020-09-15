@@ -1033,9 +1033,9 @@ class dataRun:
 				if verbose: print (shots)
 				shots = sorted(shots, key = lambda x: int(x.split('Analysis')[1].split(".")[0]) )	
 				burstAverage = []
-				xAxis = []        
+				xAxis = []
 				for shot in shots[:]:
-					shotPath = os.path.join(burstDir,shot)
+					# shotPath = os.path.join(burstDir,shot)
 					# print (shotPath)
 					# shotID = 'Burst1'
 					
