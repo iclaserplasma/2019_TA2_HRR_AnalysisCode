@@ -1414,7 +1414,7 @@ class dataRun:
 				# I think the comment below was from Chris, but it broke the code. Sorry, but I have to remove the "hack" for now
 				shots = glob.glob(os.path.join(runDir,burst,'Shot*'))
 				burstDir = os.path.join(runDir,burst)
-				OnlyShots = [f for f in os.listdir(burstDir) if not f.startswith('.')]
+				OnlyShots = [f for f in os.listdir(burstDir) if f.startswith('Shot') ]
 				TrackerID = 0
 				for shot in shots:
 					hasoData = np.load(shot,allow_pickle=True)
