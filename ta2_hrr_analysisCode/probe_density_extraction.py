@@ -1293,7 +1293,10 @@ def extract_plasma_density(data_file_s, calibrationData, analysisSavePath,
         offset, cellLengthForRun = cellChanging
         burstFolderPath = data_file_s[0]
         print (burstFolderPath)
-        burst_name = burstFolderPath.split("/")[-2]
+        try:
+            burst_name = burstFolderPath.split("/")[-2]
+        except:
+            burst_name = burstFolderPath.split("\\")[-2]
         print ("Burst Name", burst_name)
         
         burst_number = int(burst_name.split("urst")[1])
