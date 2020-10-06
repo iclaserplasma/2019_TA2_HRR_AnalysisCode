@@ -101,7 +101,7 @@ def XRayEcritESpecBased(FileList, calibrationTuple, ESpecIndicator):
     return analysedData
 
 
-def XRayEcrit(FileList, calibrationTuple):
+def XRayEcrit(FileList, calibrationTuple, AnalysisMethod):
     (ImageTransformationTuple, CameraTuple, TransmissionTuple) = calibrationTuple
     (PixelSize, GasCell2Camera, RepRate, Alpha, Alpha_error, energy, TQ) = CameraTuple
     (filterNames, ecrit, Y, YLimits) = TransmissionTuple
@@ -109,7 +109,7 @@ def XRayEcrit(FileList, calibrationTuple):
     images = ImportImageFiles(FileList)
     data = []
     # I = individual, M = Median, A = Average, A60 = top 60% averaged
-    method = 'A60'
+    method = AnalysisMethod
 
     if method == 'I':
         Peaklist = []
@@ -143,8 +143,8 @@ def XRayEcrit(FileList, calibrationTuple):
         if method == 'M' or method == 'A' or method == 'A60':
             PeakIntensityStd = PeakIntensityStd[0]
             PeakIntensity = PeakIntensity[0]
-        NPhotons, sigma_NPhotons, relevantNPhotons_Omega_s, sigma_relevantNPhotons_Omega_s = getPhotonFlux(bestEcrit, ecritStd, PeakIntensity, PeakIntensityStd, CameraTuple)
-        analysedData = (AverageValues, StdValues, PeakIntensity, PeakIntensityStd, bestEcrit, ecritStd, NPhotons, sigma_NPhotons, relevantNPhotons_Omega_s, sigma_relevantNPhotons_Omega_s)
+        NPhotons, sigma_NPhotons, relevantNPhotons_Omega_s, sigma_relevantNPhotons_Omega_s, relevantNPh_mrad_01BW, sigma_relevantNPh_mrad_01BW = getPhotonFlux(bestEcrit, ecritStd, PeakIntensity, PeakIntensityStd, CameraTuple)
+        analysedData = (AverageValues, StdValues, PeakIntensity, PeakIntensityStd, bestEcrit, ecritStd, NPhotons, sigma_NPhotons, relevantNPhotons_Omega_s, sigma_relevantNPhotons_Omega_s, relevantNPh_mrad_01BW, sigma_relevantNPh_mrad_01BW)
     else:
         analysedData = []
         print('Not enough signal on the x-ray camera to calculate a critical energy')
@@ -182,7 +182,11 @@ def getPhotonFlux(ecrit, ecritStd, PeakIntensity, PeakIntensityStd, CameraTuple)
     sigma_relevantNPhotons = sigma_NPhotonsP * limitedPhotons
     relevantNPhotons_Omega_s = relevantNPhotons * RepRate / Theta2
     sigma_relevantNPhotons_Omega_s = sigma_relevantNPhotons * RepRate / Theta2
-    return NPhotons, sigma_NPhotons, relevantNPhotons_Omega_s, sigma_relevantNPhotons_Omega_s
+    relevantNPh_mrad_01BW = np.max( NPhotons * S * 0.001 / NormFactor * energy / Theta2)
+    EnergySpectrum = NPhotons * S * 0.001 / NormFactor * energy / Theta2
+    ArgNPh = np.argmax( NPhotons * S / NormFactor * energy / Theta2)
+    sigma_relevantNPh_mrad_01BW = EnergySpectrum[ArgNPh]
+    return NPhotons, sigma_NPhotons, relevantNPhotons_Omega_s, sigma_relevantNPhotons_Omega_s, relevantNPh_mrad_01BW, sigma_relevantNPh_mrad_01BW
 
 
 def numberSpectrumBandlimited(energy, ecrit, NormFactor):
@@ -193,7 +197,7 @@ def numberSpectrumBandlimited(energy, ecrit, NormFactor):
     Al k-edge: 1.5596 keV.
     Units here in keV
     '''
-    AlEdge = 1.5596
+    AlEdge = 1.0 #1.5596
     energyLimited = np.arange(AlEdge, energy[-1], (energy[-1] - AlEdge) / energy.size )
     # energy01percent = np.arange(0.9995 * ecrit, 1.0005 * ecrit, (1.0005 * ecrit - 0.9995 * ecrit) / 100) <-- this was to calculate the no of photons in 0.1% bandwidth
     S01percent = numberSpectrum(energyLimited, ecrit) / NormFactor
@@ -202,9 +206,9 @@ def numberSpectrumBandlimited(energy, ecrit, NormFactor):
 
 def determineEcrit(AverageValues, StdValues, ecrit, Y):
     N = len(AverageValues)
-    AverageValues = prepDim(AverageValues, ecrit)
-    StdValues = prepDim(StdValues, ecrit)
-    Chi2 = np.sum((AverageValues - Y)**2/StdValues**2, 1)/N
+    AverageValuesMat = prepDim(AverageValues, ecrit)
+    StdValuesMat = prepDim(StdValues, ecrit)
+    Chi2 = np.sum((AverageValuesMat - Y)**2/StdValuesMat**2, 1)/(N-1)
     BestId = np.argmin(Chi2)
     bestEcrit = ecrit[BestId]
     # uncertainty:
@@ -212,9 +216,8 @@ def determineEcrit(AverageValues, StdValues, ecrit, Y):
         BestId -= 2
     elif BestId <= 1:
         BestId += 2
-    Chi2 = np.sum((AverageValues - Y)**2, 1)/N 
     DeltaF = (Y[BestId+1] - Y[BestId-1]) / (ecrit[BestId+1] - ecrit[BestId-1])
-    alphaInverted = 1/np.sum(DeltaF * DeltaF.T)
+    alphaInverted = 1/np.sum(DeltaF * DeltaF)
     ecritStd = np.sqrt(Chi2[BestId] * alphaInverted)
     return bestEcrit, ecritStd
 
