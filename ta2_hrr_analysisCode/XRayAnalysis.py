@@ -55,52 +55,6 @@ def averageXXpercent(images, XX):
     return np.mean( images[:, :, countsXX], axis=2)
 
 
-def XRayEcritESpecBased(FileList, calibrationTuple, ESpecIndicator):
-    (ImageTransformationTuple, CameraTuple, TransmissionTuple) = calibrationTuple
-    (PixelSize, GasCell2Camera, RepRate, Alpha, Alpha_error, energy, TQ) = CameraTuple
-    (filterNames, ecrit, Y, YLimits) = TransmissionTuple
-    (P, BackgroundImage, BackgroundNoise, PBList) = ImageTransformationTuple
-    images = ImportImageFiles(FileList)
-    data = []
-    totalW = 0
-    imageNew = np.zeros([images.shape[0], images.shape[1]])
-    for i in range(0, len(ESpecIndicator)):
-        imageNew += images[:, :, i] * ESpecIndicator[i]
-        totalW += ESpecIndicator[i]
-    if totalW > 0:
-        images = imageNew / totalW
-        images = np.expand_dims( images, axis=2)
-        for i in range(0, images.shape[2]):
-            image = images[:, :, i] - BackgroundImage
-            # tungsten filtered:
-            WList = getValues(image, PBList)
-            ValueList = getValues(image - np.mean(WList), P)
-            # normal:
-            # ValueList = getValues(image, P)
-            # this makes sure only values above the std of the noise gets taken into account of calculating the critical
-            # energy
-            preparedData, PeakIntensity, PeakIntensityStd = cleanValues(ValueList, YLimits)
-            if len(preparedData) != 0:
-                data.append(preparedData)
-                # individual:
-                # Peaklist.append(PeakIntensity)
-    if len(data) > 0:
-        AverageValues, StdValues = combineImageValues(data)
-        bestEcrit, ecritStd = determineEcrit(AverageValues, StdValues, ecrit, Y)
-        # individual way:
-        # PeakIntensityStd = np.std(np.array(Peaklist))
-        # PeakIntensity = np.mean(np.array(Peaklist))
-        # median way:
-        PeakIntensityStd = PeakIntensityStd[0]
-        PeakIntensity = PeakIntensity[0]
-        NPhotons, sigma_NPhotons, relevantNPhotons_Omega_s, sigma_relevantNPhotons_Omega_s = getPhotonFlux(bestEcrit, ecritStd, PeakIntensity, PeakIntensityStd, CameraTuple)
-        analysedData = (AverageValues, StdValues, PeakIntensity, PeakIntensityStd, bestEcrit, ecritStd, NPhotons, sigma_NPhotons, relevantNPhotons_Omega_s, sigma_relevantNPhotons_Omega_s)
-    else:
-        analysedData = []
-        print('Not enough signal on the x-ray camera to calculate a critical energy')
-    return analysedData
-
-
 def XRayEcrit(FileList, calibrationTuple, AnalysisMethod):
     (ImageTransformationTuple, CameraTuple, TransmissionTuple) = calibrationTuple
     (PixelSize, GasCell2Camera, RepRate, Alpha, Alpha_error, energy, TQ) = CameraTuple
