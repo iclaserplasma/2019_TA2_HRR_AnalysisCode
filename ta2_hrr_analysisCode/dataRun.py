@@ -476,7 +476,7 @@ class dataRun:
 		return 0	
 
 	# X-Ray Anlaysis
-	def performXRayAnalysis(self,justGetCounts=False):
+	def performXRayAnalysis(self, justGetCounts=False, AnalysisMethod='A60'):
 		try:
 			from . import XRayAnalysis
 		except:
@@ -502,8 +502,8 @@ class dataRun:
 					print('Saved counts for ' + burstStr + ' ' + shotName )
 				
 			else:
-				analysedData = XRayAnalysis.XRayEcrit(filePathDict[burstStr],xrayCalib)
-				analysisSavePath = os.path.join(analysisPath,burstStr,'XRayAnalysis')
+				analysedData = XRayAnalysis.XRayEcrit(filePathDict[burstStr],xrayCalib, AnalysisMethod)
+				analysisSavePath = os.path.join(analysisPath,burstStr,'XRayAnalysis_' + AnalysisMethod)
 				self.saveData(analysisSavePath,analysedData)
 				self.logThatShit('Performed XRay Analysis for ' + burstStr)
 				print('Performed XRay Analysis for ' + burstStr )

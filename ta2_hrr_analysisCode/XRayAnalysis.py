@@ -20,12 +20,14 @@ import pkg_resources
 import re
 
 
-def createYLimits(calibrationTuple):
-    (ImageTransformationTuple, CameraTuple, TransmissionTuple) = calibrationTuple
-    (PixelSize, GasCell2Camera, RepRate, Alpha, Alpha_error, energy, TQ) = CameraTuple
-    (filterNames, ecrit, Y) = TransmissionTuple
-    (P, BackgroundImage, BackgroundNoise) = ImageTransformationTuple
-    AverageNoise = np.mean( np.array(BackgroundNoise))
+def createYLimits(BackgroundNoise, CameraTuple, ecrit, Y):
+    '''
+    This is a bit tricky to understand. Essentially, it calculates the minimal critical energy, and counts on the camera to be
+    above the detection threshold, which is hereby defined for being 1 photon per pixel. The camera noise is taken into account.
+    There is a DebuggingXRayAnalysis notebook, which talks and shows a bit more about this topic.
+    '''
+    (_, _, _, Alpha, _, energy, TQ) = CameraTuple
+    AverageNoise = np.mean( np.array(BackgroundNoise) )
     tmp = [x[-1]/x[0] for x in Y]
     minimalCounts = [scipy.integrate.trapz( Alpha * TQ * synchrotronFunction(energy, ec), energy) for ec in ecrit]
     minimalCountsHighFilter = np.array(tmp) * np.array(minimalCounts)
@@ -38,32 +40,111 @@ def createYLimits(calibrationTuple):
         Ylimits[i] = tmp2[idrel]
     return Ylimits
 
-def XRayEcrit(FileList, calibrationTuple):
+
+def averageXXpercent(images, XX):
+    '''
+    This function returns the top xx% images in respect to their counts.
+    images is an np array with the third dimension specifying the number of images. XX is the percentage.
+    E.g. XX=60 and images.shape[2]=10 will return an np array with images.shape[2]=6, which are the brightest pictures of the org stack.
+    '''
+    xxPercent = (1 - XX/100)
+    totalCounts = np.sum( np.sum(images, axis=0), axis=0)
+    totNum = totalCounts.shape[0]
+    # counts80 = ( np.argsort(totalCounts) >= np.round(totNum*halfPercent) ) == ( np.argsort(totalCounts) <= np.round(totNum*(1 - halfPercent))-1 )
+    countsXX = ( np.argsort(totalCounts) >= np.round(totNum*xxPercent) )
+    return np.mean( images[:, :, countsXX], axis=2)
+
+
+def XRayEcritESpecBased(FileList, calibrationTuple, ESpecIndicator):
     (ImageTransformationTuple, CameraTuple, TransmissionTuple) = calibrationTuple
     (PixelSize, GasCell2Camera, RepRate, Alpha, Alpha_error, energy, TQ) = CameraTuple
-    (filterNames, ecrit, Y) = TransmissionTuple
-    (P, BackgroundImage, BackgroundNoise) = ImageTransformationTuple
-    backgroundNoiseList = createYLimits(calibrationTuple)
-    # backgroundNoiseList = getValues(BackgroundNoise, P)
+    (filterNames, ecrit, Y, YLimits) = TransmissionTuple
+    (P, BackgroundImage, BackgroundNoise, PBList) = ImageTransformationTuple
     images = ImportImageFiles(FileList)
     data = []
-    Peaklist = []
-    for i in range(0, images.shape[2]):
-        image = images[:, :, i] - BackgroundImage
-        ValueList = getValues(image, P)
-        # this makes sure only values above the std of the noise gets taken into account of calculating the critical
-        # energy
-        preparedData, PeakIntensity = cleanValues(ValueList, backgroundNoiseList)
-        if len(preparedData) != 0:
-            data.append(preparedData)
-            Peaklist.append(PeakIntensity)
+    totalW = 0
+    imageNew = np.zeros([images.shape[0], images.shape[1]])
+    for i in range(0, len(ESpecIndicator)):
+        imageNew += images[:, :, i] * ESpecIndicator[i]
+        totalW += ESpecIndicator[i]
+    if totalW > 0:
+        images = imageNew / totalW
+        images = np.expand_dims( images, axis=2)
+        for i in range(0, images.shape[2]):
+            image = images[:, :, i] - BackgroundImage
+            # tungsten filtered:
+            WList = getValues(image, PBList)
+            ValueList = getValues(image - np.mean(WList), P)
+            # normal:
+            # ValueList = getValues(image, P)
+            # this makes sure only values above the std of the noise gets taken into account of calculating the critical
+            # energy
+            preparedData, PeakIntensity, PeakIntensityStd = cleanValues(ValueList, YLimits)
+            if len(preparedData) != 0:
+                data.append(preparedData)
+                # individual:
+                # Peaklist.append(PeakIntensity)
     if len(data) > 0:
         AverageValues, StdValues = combineImageValues(data)
         bestEcrit, ecritStd = determineEcrit(AverageValues, StdValues, ecrit, Y)
-        PeakIntensityStd = np.std(np.array(Peaklist))
-        PeakIntensity = np.mean(np.array(Peaklist))
-        NPhotons, sigma_NPhotons, _, NPhotons_01percent_omega_s = getPhotonFlux(bestEcrit, ecritStd, PeakIntensity, PeakIntensityStd, CameraTuple)
-        analysedData = (AverageValues, StdValues, PeakIntensity, PeakIntensityStd, bestEcrit, ecritStd, NPhotons, sigma_NPhotons, NPhotons_01percent_omega_s)
+        # individual way:
+        # PeakIntensityStd = np.std(np.array(Peaklist))
+        # PeakIntensity = np.mean(np.array(Peaklist))
+        # median way:
+        PeakIntensityStd = PeakIntensityStd[0]
+        PeakIntensity = PeakIntensity[0]
+        NPhotons, sigma_NPhotons, relevantNPhotons_Omega_s, sigma_relevantNPhotons_Omega_s = getPhotonFlux(bestEcrit, ecritStd, PeakIntensity, PeakIntensityStd, CameraTuple)
+        analysedData = (AverageValues, StdValues, PeakIntensity, PeakIntensityStd, bestEcrit, ecritStd, NPhotons, sigma_NPhotons, relevantNPhotons_Omega_s, sigma_relevantNPhotons_Omega_s)
+    else:
+        analysedData = []
+        print('Not enough signal on the x-ray camera to calculate a critical energy')
+    return analysedData
+
+
+def XRayEcrit(FileList, calibrationTuple, AnalysisMethod):
+    (ImageTransformationTuple, CameraTuple, TransmissionTuple) = calibrationTuple
+    (PixelSize, GasCell2Camera, RepRate, Alpha, Alpha_error, energy, TQ) = CameraTuple
+    (filterNames, ecrit, Y, YLimits) = TransmissionTuple
+    (P, BackgroundImage, BackgroundNoise, PBList) = ImageTransformationTuple
+    images = ImportImageFiles(FileList)
+    data = []
+    # I = individual, M = Median, A = Average, A60 = top 60% averaged
+    method = AnalysisMethod
+
+    if method == 'I':
+        Peaklist = []
+    elif method == 'M':
+        images = np.expand_dims( np.median(images, axis=2), axis=2)
+    elif method == 'A':
+        images = np.expand_dims( np.mean(images, axis=2), axis=2)
+    elif method == 'A60':
+        images = np.expand_dims( averageXXpercent(images, 60), axis=2)
+
+    for i in range(0, images.shape[2]):
+        image = images[:, :, i] - BackgroundImage
+        # tungsten filtered:
+        WList = getValues(image, PBList)
+        ValueList = getValues(image - np.mean(WList), P)
+        # not tungsten filtered (legacy code, but should remain to see what has been done before):
+        # ValueList = getValues(image, P)
+        # this makes sure only values above the std of the noise gets taken into account of calculating the critical
+        # energy
+        preparedData, PeakIntensity, PeakIntensityStd = cleanValues(ValueList, YLimits)
+        if len(preparedData) != 0:
+            data.append(preparedData)
+            if method == 'I':
+                Peaklist.append(PeakIntensity)
+    if len(data) > 0:
+        AverageValues, StdValues = combineImageValues(data)
+        bestEcrit, ecritStd = determineEcrit(AverageValues, StdValues, ecrit, Y)
+        if method == 'I':
+            PeakIntensityStd = np.std(np.array(Peaklist))
+            PeakIntensity = np.mean(np.array(Peaklist))
+        if method == 'M' or method == 'A' or method == 'A60':
+            PeakIntensityStd = PeakIntensityStd[0]
+            PeakIntensity = PeakIntensity[0]
+        NPhotons, sigma_NPhotons, relevantNPhotons_Omega_s, sigma_relevantNPhotons_Omega_s, relevantNPh_mrad_01BW, sigma_relevantNPh_mrad_01BW = getPhotonFlux(bestEcrit, ecritStd, PeakIntensity, PeakIntensityStd, CameraTuple)
+        analysedData = (AverageValues, StdValues, PeakIntensity, PeakIntensityStd, bestEcrit, ecritStd, NPhotons, sigma_NPhotons, relevantNPhotons_Omega_s, sigma_relevantNPhotons_Omega_s, relevantNPh_mrad_01BW, sigma_relevantNPh_mrad_01BW)
     else:
         analysedData = []
         print('Not enough signal on the x-ray camera to calculate a critical energy')
@@ -72,7 +153,7 @@ def XRayEcrit(FileList, calibrationTuple):
 
 def getPhotonFlux(ecrit, ecritStd, PeakIntensity, PeakIntensityStd, CameraTuple):
     (PixelSize, GasCell2Camera, RepRate, Alpha, Alpha_error, energy, TQ) = CameraTuple
-    Theta2 = (PixelSize / GasCell2Camera) ** 2 * 1e6
+    Theta2 = (PixelSize / GasCell2Camera) ** 2 * (1e3 * 1e3) # mrad^2
 
     S = numberSpectrum(energy, ecrit)
     NormFactor = scipy.integrate.trapz(S, energy)
@@ -96,23 +177,38 @@ def getPhotonFlux(ecrit, ecritStd, PeakIntensity, PeakIntensityStd, CameraTuple)
     sigma_NPhotonsN = np.sqrt(QS1 ** 2 + QS2 ** 2 + QS3N ** 2)
     sigma_NPhotons = (sigma_NPhotonsN, sigma_NPhotonsP)
 
-    limitedEnergy = numberSpectrumBandlimited(ecrit, NormFactor)
-    NPhotons01percent = NPhotons * limitedEnergy
-    NPhotons_01percent_omega_s = NPhotons01percent * RepRate / Theta2
-    return NPhotons, sigma_NPhotons, NPhotons01percent, NPhotons_01percent_omega_s
+    limitedPhotons = numberSpectrumBandlimited(energy, ecrit, NormFactor)
+    relevantNPhotons = NPhotons * limitedPhotons
+    sigma_relevantNPhotons = sigma_NPhotonsP * limitedPhotons
+    relevantNPhotons_Omega_s = relevantNPhotons * RepRate / Theta2
+    sigma_relevantNPhotons_Omega_s = sigma_relevantNPhotons * RepRate / Theta2
+    relevantNPh_mrad_01BW = np.max( NPhotons * S * 0.001 / NormFactor * energy / Theta2)
+    EnergySpectrum = NPhotons * S * 0.001 / NormFactor * energy / Theta2
+    ArgNPh = np.argmax( NPhotons * S / NormFactor * energy / Theta2)
+    sigma_relevantNPh_mrad_01BW = EnergySpectrum[ArgNPh]
+    return NPhotons, sigma_NPhotons, relevantNPhotons_Omega_s, sigma_relevantNPhotons_Omega_s, relevantNPh_mrad_01BW, sigma_relevantNPh_mrad_01BW
 
 
-def numberSpectrumBandlimited(ecrit, NormFactor):
-    energy01percent = np.arange(0.9995 * ecrit, 1.0005 * ecrit, (1.0005 * ecrit - 0.9995 * ecrit) / 100)
-    S01percent = numberSpectrum(energy01percent, ecrit) / NormFactor
-    return scipy.integrate.trapz(S01percent, energy01percent)
+def numberSpectrumBandlimited(energy, ecrit, NormFactor):
+    '''
+    Calculates the number of photons above the k-edge of aluminium, in respect to the entire number of photons
+    (which is the input variable "NormFactor") for a specific critical energy.
+    energy is the original range of defined possible photons.
+    Al k-edge: 1.5596 keV.
+    Units here in keV
+    '''
+    AlEdge = 1.0 #1.5596
+    energyLimited = np.arange(AlEdge, energy[-1], (energy[-1] - AlEdge) / energy.size )
+    # energy01percent = np.arange(0.9995 * ecrit, 1.0005 * ecrit, (1.0005 * ecrit - 0.9995 * ecrit) / 100) <-- this was to calculate the no of photons in 0.1% bandwidth
+    S01percent = numberSpectrum(energyLimited, ecrit) / NormFactor
+    return scipy.integrate.trapz(S01percent, energyLimited)
 
 
 def determineEcrit(AverageValues, StdValues, ecrit, Y):
     N = len(AverageValues)
-    AverageValues = prepDim(AverageValues, ecrit)
-    StdValues = prepDim(StdValues, ecrit)
-    Chi2 = np.sum((AverageValues - Y)**2/StdValues**2, 1)/N
+    AverageValuesMat = prepDim(AverageValues, ecrit)
+    StdValuesMat = prepDim(StdValues, ecrit)
+    Chi2 = np.sum((AverageValuesMat - Y)**2/StdValuesMat**2, 1)/(N-1)
     BestId = np.argmin(Chi2)
     bestEcrit = ecrit[BestId]
     # uncertainty:
@@ -120,9 +216,8 @@ def determineEcrit(AverageValues, StdValues, ecrit, Y):
         BestId -= 2
     elif BestId <= 1:
         BestId += 2
-    Chi2 = np.sum((AverageValues - Y)**2, 1)/N 
     DeltaF = (Y[BestId+1] - Y[BestId-1]) / (ecrit[BestId+1] - ecrit[BestId-1])
-    alphaInverted = 1/np.sum(DeltaF * DeltaF.T)
+    alphaInverted = 1/np.sum(DeltaF * DeltaF)
     ecritStd = np.sqrt(Chi2[BestId] * alphaInverted)
     return bestEcrit, ecritStd
 
@@ -146,22 +241,27 @@ def combineImageValues(data):
 def cleanValues(ValueList, backgroundNoiseList):
     cleanV = []
     PeakIntensity = []
+    PeakIntensityStd = []
     ToNormalise = np.zeros(len(ValueList))
+    ToNormaliseStd = np.zeros(len(ValueList))
     for i in range(0, len(ValueList)):
         tmpV = ValueList[i]
-        Vs = tmpV[tmpV > backgroundNoiseList[i]]
+        # Vs = tmpV[tmpV > backgroundNoiseList[i]]
+        Vs = tmpV[tmpV > -1e6]
         if len(Vs) == 0:
             print('Values in \'clean Values\' are empty. Std of background is too high')
             cleanV = []
             break
         cleanV.append(Vs)
         ToNormalise[i] = np.mean(cleanV[-1])
+        ToNormaliseStd[i] = np.std(cleanV[-1])
         if i == 0:
             PeakIntensity.append(ToNormalise[i])
+            PeakIntensityStd.append(ToNormaliseStd[i])
     if len(Vs) != 0:
         Norm = np.sum(ToNormalise)
         cleanV = [x/Norm for x in cleanV]
-    return cleanV, PeakIntensity
+    return cleanV, PeakIntensity, PeakIntensityStd
 
 
 def synchrotronFunction(energy, ecrit):
@@ -360,10 +460,10 @@ def mainCalibrationFunction(runName, basePath='Z:\\', calPath='Y:\\ProcessedCali
     """
     The most important parameter, which is constructed here is the calibrationTuple. This is a tuple containing the
     information necessary, to analyse an image.
-    calibrationTuple = (ImageTransformationTuple, CameraTuple, TransmissionTuple)
+    calibrationTuple = (ImageTransformationTuple, CameraTuple, TransmissionTuple, PBList)
     The three parameter tuple in there correspond to three parts of the analysis:
 
-    TransmissionTuple = (filterNames, ecrit, Y)
+    TransmissionTuple = (filterNames, ecrit, Y, YLimits)
     This contains the filter pack names, the vector of different critical energies, which was used to contruct Y.
     Y is the normalised transmission through the 4 different filters and through the non-filter background.
     The normalisation is based on the sum of the transmission. The dimension is (ecrit, filter)
@@ -371,10 +471,11 @@ def mainCalibrationFunction(runName, basePath='Z:\\', calPath='Y:\\ProcessedCali
     CameraTuple = (PixelSize, GasCell2Camera, RepRate, Alpha, Alpha_error)
     These parameter are pretty much used to get the photon flux, once the critical energy is estimated.
 
-    ImageTransformationTuple = (P, BackgroundImage, BackgroundNoise) In order to transform the raw images into
+    ImageTransformationTuple = (P, BackgroundImage, BackgroundNoise, PBList) In order to transform the raw images into
     usuable data, one has to subtract the darkfield and then identify the pixel values for the different filter. P is
     a list of a list of indices, which pixel are contained for a specific filter are contained. The BackgroundNoise
-    is the std of the darkfields and the idea is to use it to estimate a lowest level of eliminating criteria.
+    is the std of the darkfields and the idea is to use it to estimate a lowest level of eliminating criteria. PB is the
+    area of the tungstan, which enable the background on shot as a lot of noise is generated
     :param runName:
     :param basePath:
     :param calPath:
@@ -387,8 +488,6 @@ def mainCalibrationFunction(runName, basePath='Z:\\', calPath='Y:\\ProcessedCali
         txtFile = 'Compact2019OctoberTA2.txt'
         txtFilePath = os.path.join(basePath, 'Calibrations', 'XRay', txtFile)
         filterNames, ecrit, Y = importXRayTransmissions(txtFilePath)
-        TransmissionTuple = (filterNames, ecrit, Y)
-
         runPath = os.path.join(basePath, 'MIRAGE', 'XRay', runName)
         imageFolderPath = simpleFolderFinder(runPath)
         FileList = TupleOfFiles(imageFolderPath)
@@ -425,9 +524,9 @@ def mainCalibrationFunction(runName, basePath='Z:\\', calPath='Y:\\ProcessedCali
         P = []
 
         sizex, sizey, _ = testImage.shape
-        X, Y = np.meshgrid(range(sizex), range(sizey))
-        idx = X.ravel()
-        idy = Y.ravel()
+        XM, YM = np.meshgrid(range(sizex), range(sizey))
+        idx = XM.ravel()
+        idy = YM.ravel()
 
         for fN in filterNames:
             cc = 0
@@ -437,6 +536,7 @@ def mainCalibrationFunction(runName, basePath='Z:\\', calPath='Y:\\ProcessedCali
                     # check if this works... Not sure, because I overwrite it again...
                     P.append(getMaskFromPts(Pold[cc], idx, idy, []))
                 cc += 1
+        PBList = [ getMaskFromPts([ PB ], idx, idy, []) ]
         if sizex > 1000:
             PixelSize = 13e-6
         else:
@@ -486,12 +586,14 @@ def mainCalibrationFunction(runName, basePath='Z:\\', calPath='Y:\\ProcessedCali
         if foundDarkfields:
             if BackgroundImage == 0:
                 BackgroundImage, BackgroundNoise = backgroundImages(backgroundImagesPath)
-            ImageTransformationTuple = (P, BackgroundImage, BackgroundNoise)
+            ImageTransformationTuple = (P, BackgroundImage, BackgroundNoise, PBList)
             totalCalibrationFilePath = os.path.join(calPath, 'XRay', '%d' % runDate)
             if not os.path.exists(totalCalibrationFilePath):
                 os.mkdir(totalCalibrationFilePath)
             simpleRunName = runName[9:]
             calFile = os.path.join(totalCalibrationFilePath, simpleRunName)
+            YLimits = createYLimits(BackgroundNoise, CameraTuple, ecrit, Y)
+            TransmissionTuple = (filterNames, ecrit, Y, YLimits)
             calibrationTuple = (ImageTransformationTuple, CameraTuple, TransmissionTuple)
             np.save(calFile, calibrationTuple)
             #  the entry for the database is a relative path:
