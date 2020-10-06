@@ -831,6 +831,82 @@ class dataRun:
 		return BurstIDS, eDataBurst, calData
 
 
+	def loadAnalysedXRayData(self, getShots=False, AnalysisMethod = 'A60'):
+		''' Retrieves the Analysed X-ray data
+
+		Each analysed file has data stored in the form:
+		(AverageValues, StdValues, PeakIntensity, PeakIntensityStd, bestEcrit, ecritStd, 
+		NPhotons, sigma_NPhotons, relevantNPhotons_Omega_s, sigma_relevantNPhotons_Omega_s, 
+		relevantNPh_mrad_01BW, sigma_relevantNPh_mrad_01BW
+
+		getShots = False is the only working way. the data is saved per burst
+		'''
+		baseAnalysisFolder = self.baseAnalysisFolder
+		runDate = self.runDate
+		runName = self.runName
+
+		diag = 'XRay'
+			
+		runDir = os.path.join(baseAnalysisFolder , diag,  runDate , runName)
+		bursts = [f for f in os.listdir(runDir) if not f.startswith('.')]
+
+		if getShots:
+			print("Shots are always averaged per burst due to the low x-ray flux")												
+		else:
+			Ecrit = []
+			NPhotons = []
+			NPhotons_Omega_s = []
+			NPh_mrad_01BW = []
+			StdEcrit = []
+			StdNPhotons = []
+			StdNPhotons_Omega_s = []
+			StdNPh_mrad_01BW = []
+			shotID = []
+
+			for burst in bursts[:]:
+				print ("loading ", diag,  burst)
+				analysisSavePath = os.path.join(runDir, burst, 'XRayAnalysis_' + AnalysisMethod)
+				if os.path.exists(loadingPath):
+					loadedData = np.load(analysisSavePath, allow_pickle=True) 
+            	else:
+					loadedData = [None for i in range(0, 12)]
+					print('No analysed data for %s found in %s' %(Diag, loadingPath))
+				
+				Ecrit.appen( loadedData[4] )
+				NPhotons.appen( loadedData[6] )
+				NPhotons_Omega_s.appen( loadedData[8] )
+				NPh_mrad_01BW.appen( loadedData[10] )
+
+				StdEcrit.appen( loadedData[5] )
+				StdNPhotons.appen( loadedData[7] )
+				StdNPhotons_Omega_s.appen( loadedData[9] )
+				StdNPh_mrad_01BW.appen( loadedData[11] )
+
+				# Append to the lists
+				shotID.append(burst)
+		# Finished extracting data.
+		# Sorting the data to be in the correct order
+		
+			# This is the option when getShots = False, bursts
+			burstNums = []
+			for burst in shotID:
+				burstNums.append(int(burst[5:]))
+			indxOrder = np.argsort(burstNums)
+			shotID_sorted = np.asarray(shotID)[indxOrder]
+			Ecrit_sorted = np.asarray(Ecrit)[indxOrder] 
+			StdEcrit_sorted = np.asarray(StdEcrit)[indxOrder]
+
+			NPhotons_sorted = np.asarray(NPhotons)[indxOrder] 
+			StdNPhotons_sorted = np.asarray(StdNPhotons)[indxOrder]
+
+			NPhotons_Omega_s_sorted = np.asarray(NPhotons_Omega_s)[indxOrder]
+			StdNPhotons_Omega_s_sorted = np.asarray(StdNPhotons_Omega_s)[indxOrder] 
+
+			NPh_mrad_01BW_sorted = np.asarray(NPh_mrad_01BW)[indxOrder] 
+			StdNPh_mrad_01BW_sorted = np.asarray(StdNPh_mrad_01BW)[indxOrder]
+		return shotID_sorted, (Ecrit_sorted, StdEcrit_sorted), (NPhotons_sorted, StdNPhotons_sorted), (NPhotons_Omega_s_sorted, StdNPhotons_Omega_s_sorted), (NPh_mrad_01BW_sorted, StdNPh_mrad_01BW_sorted)
+		
+
 	def loadAnalysedXRayCountsData(self,getShots=False):
 		# General function to pull all of the XRay data from the analysis folder
 		# It will automatically sort the data
