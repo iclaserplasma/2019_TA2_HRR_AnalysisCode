@@ -864,23 +864,24 @@ class dataRun:
 			shotID = []
 
 			for burst in bursts[:]:
-				print ("loading ", diag,  burst)
-				analysisSavePath = os.path.join(runDir, burst, 'XRayAnalysis_' + AnalysisMethod)
-				if os.path.exists(loadingPath):
+				#print ("loading ", diag,  burst)
+				analysisSavePath = os.path.join(runDir, burst, 'XRayAnalysis_' + AnalysisMethod + '.npy')
+				print(analysisSavePath)
+				if os.path.exists(analysisSavePath):
 					loadedData = np.load(analysisSavePath, allow_pickle=True) 
-            	else:
+				else:
 					loadedData = [None for i in range(0, 12)]
 					print('No analysed data for %s found in %s' %(Diag, loadingPath))
 				
-				Ecrit.appen( loadedData[4] )
-				NPhotons.appen( loadedData[6] )
-				NPhotons_Omega_s.appen( loadedData[8] )
-				NPh_mrad_01BW.appen( loadedData[10] )
+				Ecrit.append( loadedData[4] )
+				NPhotons.append( loadedData[6] )
+				NPhotons_Omega_s.append( loadedData[8] )
+				NPh_mrad_01BW.append( loadedData[10] )
 
-				StdEcrit.appen( loadedData[5] )
-				StdNPhotons.appen( loadedData[7] )
-				StdNPhotons_Omega_s.appen( loadedData[9] )
-				StdNPh_mrad_01BW.appen( loadedData[11] )
+				StdEcrit.append( loadedData[5] )
+				StdNPhotons.append( loadedData[7] )
+				StdNPhotons_Omega_s.append( loadedData[9] )
+				StdNPh_mrad_01BW.append( loadedData[11] )
 
 				# Append to the lists
 				shotID.append(burst)
@@ -925,7 +926,8 @@ class dataRun:
 			imgCounts = []
 			shotID = []
 			for burst in bursts:
-				shots = os.listdir(os.path.join(analysedDataDir,burst))
+				shots = [f for f in os.listdir(os.path.join(analysedDataDir,burst)) if f.startswith('XRayImgCounts_')]
+				#shots = os.listdir(os.path.join(analysedDataDir,burst))
 				for shot in shots:
 					imgCounts.append(np.load(os.path.join(analysedDataDir,burst,shot),allow_pickle=True).astype(float))
 					for elem in shot.replace('.','_').split('_'):
