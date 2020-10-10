@@ -255,10 +255,15 @@ class dataRun:
 
 		gasCellPressure = {}
 		gasCellLength = {}
-		for i in range(np.max(shotOrBurst)):
-			SoB = shotOrBurst[i]
-			gasCellPressure[SoB] = pressure[i]
-			gasCellLength[SoB] = length[i]
+		try:
+			for i in range(np.max(shotOrBurst)):
+				SoB = shotOrBurst[i]
+				gasCellPressure[SoB] = pressure[i]
+				gasCellLength[SoB] = length[i]
+		except:
+			gasCellPressure = {}
+			gasCellPressure = {}
+
 		
 		
 		analysisPath,doesItExist = self.getDiagAnalysisPath('General')
